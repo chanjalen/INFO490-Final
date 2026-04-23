@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m django --version)",
+      "Bash(pip install *)",
+      "Bash(django-admin startproject *)",
+      "Bash(python manage.py startapp search)",
+      "Bash(python manage.py makemigrations)",
+      "Bash(python manage.py migrate)",
+      "Bash(python manage.py check)"
+    ]
+  }
+}

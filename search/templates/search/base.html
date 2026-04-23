@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MovieFinder{% endblock %}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #111; color: #eee; }
+        nav { background: #1a1a2e; padding: 12px 24px; font-size: 1.2rem; font-weight: bold; }
+        nav a { color: #e94560; text-decoration: none; }
+        .container { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+    </style>
+</head>
+<body>
+    <nav><a href="{% url 'home' %}">MovieFinder</a></nav>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

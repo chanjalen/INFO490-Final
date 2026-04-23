@@ -1,0 +1,27 @@
+{% extends "search/base.html" %}
+
+{% block title %}{{ movie.title }}{% endblock %}
+
+{% block content %}
+<a href="javascript:history.back()" style="color:#e94560;">&larr; Back to results</a>
+
+<div style="display:flex; gap:30px; margin-top:24px;">
+    {% if movie.poster_url %}
+        <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" style="width:200px; height:300px; object-fit:cover; border-radius:8px;">
+    {% else %}
+        <div style="width:200px; height:300px; background:#333; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666;">No Image</div>
+    {% endif %}
+
+    <div>
+        <h1 style="margin:0 0 8px;">{{ movie.title }}</h1>
+        {% if movie.release_year %}<p style="color:#aaa; margin:0 0 6px;">{{ movie.release_year }}</p>{% endif %}
+        {% if movie.genre %}<p style="margin:0 0 6px;"><strong>Genre:</strong> {{ movie.genre }}</p>{% endif %}
+        {% if movie.language %}<p style="margin:0 0 6px;"><strong>Language:</strong> {{ movie.language }}</p>{% endif %}
+        {% if movie.cast %}<p style="margin:0 0 6px;"><strong>Cast:</strong> {{ movie.cast }}</p>{% endif %}
+        {% if movie.synopsis %}
+            <h3>Synopsis</h3>
+            <p>{{ movie.synopsis }}</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
