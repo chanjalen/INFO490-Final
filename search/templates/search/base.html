@@ -1,20 +1,33 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}MovieFinder{% endblock %}</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; background: #111; color: #eee; }
-        nav { background: #1a1a2e; padding: 12px 24px; font-size: 1.2rem; font-weight: bold; }
-        nav a { color: #e94560; text-decoration: none; }
-        .container { max-width: 900px; margin: 40px auto; padding: 0 20px; }
-    </style>
+    <title>{% block title %}SoClose{% endblock %}</title>
+    <meta name="description" content="Semantic film search for finding movies from partial memories, scenes, characters, and story clues.">
+    <link rel="stylesheet" href="{% static 'search/app.css' %}">
+    <script defer src="{% static 'search/app.js' %}"></script>
 </head>
 <body>
-    <nav><a href="{% url 'home' %}">MovieFinder</a></nav>
-    <div class="container">
-        {% block content %}{% endblock %}
+    <div class="site-shell">
+        <header class="topbar">
+            <div class="topbar__inner">
+                <a class="brand" href="{% url 'home' %}">SoClose</a>
+                <nav class="topnav" aria-label="Primary">
+                    <a class="topnav__link {% if active_page == 'search' %}is-active{% endif %}" href="{% url 'home' %}">Search</a>
+                    <a class="topnav__link {% if active_page == 'history' %}is-active{% endif %}" href="{% url 'history' %}">History</a>
+                    <a class="topnav__link {% if active_page == 'recommended' %}is-active{% endif %}" href="{% url 'recommended' %}">Recommended</a>
+                </nav>
+                <div class="topbar__meta">
+                    <span class="eyebrow eyebrow--quiet">Semantic film intelligence</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="page">
+            {% block content %}{% endblock %}
+        </main>
     </div>
 </body>
 </html>

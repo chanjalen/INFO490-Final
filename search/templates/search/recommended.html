@@ -1,0 +1,50 @@
+{% extends "search/base.html" %}
+
+{% block title %}SoClose | Recommendations{% endblock %}
+
+{% block content %}
+<section class="stack">
+    <div class="section-intro section-intro--center">
+        <p class="eyebrow">Curated for you</p>
+        <h1 class="section-title">Recommendations</h1>
+        <p class="section-copy">
+            {% if based_on_history %}
+                These suggestions reflect the genres, languages, and clues from your recent searches.
+            {% else %}
+                Your recommendation profile is empty, so here are strong starting points from the current catalog.
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="recommendation-list">
+        {% for item in recommendations %}
+            <article class="recommendation-card">
+                <div class="recommendation-card__media">
+                    {% if item.movie.poster_url %}
+                        <img src="{{ item.movie.poster_url }}" alt="{{ item.movie.title }} poster">
+                    {% else %}
+                        <div class="recommendation-card__poster-fallback" aria-hidden="true">
+                            <span>{{ item.movie.title|slice:":1" }}</span>
+                            <small>{{ item.movie.release_year|default:"Film" }}</small>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="recommendation-card__body">
+                    <p class="recommendation-card__eyebrow">{{ item.movie.genre|default:"Uncategorized" }}</p>
+                    <h2>{{ item.movie.title }}</h2>
+                    <p class="recommendation-card__meta">
+                        {% if item.movie.release_year %}{{ item.movie.release_year }}{% endif %}
+                        {% if item.movie.language %} - {{ item.movie.language }}{% endif %}
+                    </p>
+                    <div class="recommendation-card__reason">
+                        <span class="pill pill--soft">Why it fits</span>
+                        <p>{{ item.reason }}</p>
+                    </div>
+                    <p class="recommendation-card__copy">{{ item.movie.synopsis|truncatewords:40 }}</p>
+                    <a class="button button--primary" href="{% url 'movie_detail' item.movie.id %}">Open movie</a>
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "search/base.html" %}
+
+{% block title %}SoClose | Search History{% endblock %}
+
+{% block content %}
+<section class="stack stack--narrow">
+    <div class="section-intro section-intro--center">
+        <p class="eyebrow">Your journey</p>
+        <h1 class="section-title">Search History</h1>
+        <p class="section-copy">Every clue you have tried, kept in one place so you can quickly revisit promising leads.</p>
+    </div>
+
+    <form class="history-search" method="get" action="{% url 'history' %}">
+        <label class="sr-only" for="history_q">Search history</label>
+        <input id="history_q" name="history_q" type="text" value="{{ history_query }}" placeholder="Search your history...">
+        <button class="button button--secondary" type="submit">Filter</button>
+    </form>
+
+    {% if history_items %}
+        <div class="history-list">
+            {% for item in history_items %}
+                <article class="history-card">
+                    <div class="history-card__top">
+                        <div>
+                            <p class="history-card__time">{{ item.relative_time }}</p>
+                            <h2 class="history-card__summary">{{ item.summary }}</h2>
+                        </div>
+                        <span class="pill">{{ item.result_count }} result{{ item.result_count|pluralize }}</span>
+                    </div>
+
+                    <div class="history-card__meta">
+                        <span>{{ item.timestamp_display }}</span>
+                        {% if item.focus %}<span>Focus: {{ item.focus }}</span>{% endif %}
+                    </div>
+
+                    <div class="history-card__actions">
+                        <a
+                            class="button button--secondary"
+                            href="{% url 'results' %}?q={{ item.query|urlencode }}{% if item.genre %}&genre={{ item.genre|urlencode }}{% endif %}{% if item.language %}&language={{ item.language|urlencode }}{% endif %}{% if item.year %}&year={{ item.year|urlencode }}{% endif %}{% if item.focus %}&focus={{ item.focus|urlencode }}{% endif %}"
+                        >
+                            Search again
+                        </a>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+
+        <p class="history-footnote">Showing {{ history_items|length }} of {{ all_history_count }} saved searches.</p>
+    {% else %}
+        <div class="empty-state">
+            <p class="empty-state__title">No searches saved yet.</p>
+            <p class="empty-state__copy">Run a search from the home page and it will appear here automatically.</p>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

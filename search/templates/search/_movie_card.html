@@ -1,0 +1,25 @@
+<article class="movie-card">
+    <a class="movie-card__link" href="{% url 'movie_detail' movie.id %}">
+        {% if movie.poster_url %}
+            <img class="movie-card__poster" src="{{ movie.poster_url }}" alt="{{ movie.title }} poster">
+        {% else %}
+            <div class="movie-card__poster movie-card__poster--fallback" aria-hidden="true">
+                <span>{{ movie.title|slice:":1" }}</span>
+                <small>{{ movie.release_year|default:"Film" }}</small>
+            </div>
+        {% endif %}
+
+        <div class="movie-card__body">
+            <div class="movie-card__meta">
+                <p class="movie-card__eyebrow">{{ movie.genre|default:"Uncategorized" }}</p>
+                <p class="movie-card__eyebrow">{{ movie.language|default:"Unknown language" }}</p>
+            </div>
+            <h3 class="movie-card__title">{{ movie.title }}</h3>
+            <p class="movie-card__subtitle">
+                {% if movie.release_year %}{{ movie.release_year }}{% else %}Year unknown{% endif %}
+                {% if movie.cast %} - {{ movie.cast|truncatechars:48 }}{% endif %}
+            </p>
+            <p class="movie-card__synopsis">{{ movie.synopsis|default:"No synopsis available yet."|truncatewords:28 }}</p>
+        </div>
+    </a>
+</article>

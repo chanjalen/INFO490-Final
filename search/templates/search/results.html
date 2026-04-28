@@ -1,40 +1,45 @@
 {% extends "search/base.html" %}
 
-{% block title %}Results for "{{ query }}"{% endblock %}
+{% block title %}SoClose | Search Results{% endblock %}
 
 {% block content %}
-<h2>Results for "{{ query }}"</h2>
+<section class="stack stack--wide">
+    <div class="section-intro">
+        <p class="eyebrow">Discover</p>
+        {% if has_search %}
+            <h1 class="section-title">Results shaped around your memory.</h1>
+            <p class="section-copy">
+                {% if query %}<strong>Query:</strong> "{{ query }}"{% endif %}
+                {% if selected_genre %} <strong>Genre:</strong> {{ selected_genre }}{% endif %}
+                {% if selected_language %} <strong>Language:</strong> {{ selected_language }}{% endif %}
+                {% if selected_year %} <strong>Year:</strong> {{ selected_year }}{% endif %}
+            </p>
+        {% else %}
+            <h1 class="section-title">Start with any clue.</h1>
+            <p class="section-copy">Use the search workspace below to explore the catalog by memory, not just by exact title.</p>
+        {% endif %}
+    </div>
 
-<form method="GET" action="{% url 'results' %}" style="display:flex; gap:10px; margin-bottom:30px;">
-    <input
-        type="text"
-        name="q"
-        value="{{ query }}"
-        style="flex:1; padding:10px; font-size:1rem; border-radius:6px; border:none; background:#222; color:#eee;"
-    >
-    <button type="submit" style="padding:10px 20px; background:#e94560; color:#fff; border:none; border-radius:6px; cursor:pointer;">
-        Search
-    </button>
-</form>
+    {% include "search/_search_panel.html" %}
 
-{% if movies %}
-    {% for movie in movies %}
-    <a href="{% url 'movie_detail' movie.id %}" style="text-decoration:none; color:inherit;">
-        <div style="display:flex; gap:16px; background:#1a1a2e; border-radius:8px; padding:16px; margin-bottom:16px;">
-            {% if movie.poster_url %}
-                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" style="width:80px; height:120px; object-fit:cover; border-radius:4px;">
-            {% else %}
-                <div style="width:80px; height:120px; background:#333; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#666;">No Image</div>
-            {% endif %}
-            <div>
-                <h3 style="margin:0 0 6px;">{{ movie.title }} {% if movie.release_year %}({{ movie.release_year }}){% endif %}</h3>
-                <p style="color:#aaa; margin:0 0 6px;">{{ movie.genre }}</p>
-                <p style="margin:0; font-size:0.9rem;">{{ movie.synopsis|truncatewords:30 }}</p>
-            </div>
+    {% if has_search %}
+        <div class="results-summary">
+            <p class="results-summary__count">{{ movies|length }} match{{ movies|length|pluralize }} found</p>
+            <a class="text-link" href="{% url 'history' %}">View recent searches</a>
         </div>
-    </a>
-    {% endfor %}
-{% else %}
-    <p style="color:#aaa;">No movies found for "{{ query }}". Try different keywords.</p>
-{% endif %}
+
+        {% if movies %}
+            <div class="movie-grid">
+                {% for movie in movies %}
+                    {% include "search/_movie_card.html" with movie=movie %}
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <p class="empty-state__title">Nothing landed on the first pass.</p>
+                <p class="empty-state__copy">Try broader wording, remove a filter, or switch the focus chip to character, scene, plot, dialogue, or visual.</p>
+            </div>
+        {% endif %}
+    {% endif %}
+</section>
 {% endblock %}
