@@ -1,21 +1,21 @@
 {% extends "search/base.html" %}
 
-{% block title %}MovieFinder — Find Any Movie{% endblock %}
+{% block title %}SoClose | Semantic Movie Search{% endblock %}
 
 {% block content %}
-<h1 style="text-align:center; margin-top: 60px;">Find Your Movie</h1>
-<p style="text-align:center; color:#aaa;">Describe a movie, character, actor, or title — even if you only remember part of it.</p>
+<section class="hero">
+    <div class="hero__backdrop" aria-hidden="true"></div>
+    <div class="hero__inner">
+        <p class="eyebrow">Semantic film intelligence</p>
+        <h1 class="hero__title">
+            Find the movie you are searching for,
+            <span>even from just a faint memory.</span>
+        </h1>
+        <p class="hero__copy">
+            Search by title, actor, dialogue fragment, plot clue, atmosphere, or the one visual detail you still remember.
+        </p>
 
-<form method="GET" action="{% url 'results' %}" style="display:flex; gap:10px; margin-top:30px;">
-    <input
-        type="text"
-        name="q"
-        placeholder="e.g. 'space movie with a lion king type story'..."
-        style="flex:1; padding:12px; font-size:1rem; border-radius:6px; border:none; background:#222; color:#eee;"
-        autofocus
-    >
-    <button type="submit" style="padding:12px 24px; background:#e94560; color:#fff; border:none; border-radius:6px; font-size:1rem; cursor:pointer;">
-        Search
-    </button>
-</form>
+        {% include "search/_search_panel.html" %}
+    </div>
+</section>
 {% endblock %}
