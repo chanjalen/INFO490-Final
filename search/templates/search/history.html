@@ -10,10 +10,15 @@
         <p class="section-copy">Every clue you have tried, kept in one place so you can quickly revisit promising leads.</p>
     </div>
 
-    <form class="history-search" method="get" action="{% url 'history' %}">
+    <form class="history-search-bar" method="get" action="{% url 'history' %}">
         <label class="sr-only" for="history_q">Search history</label>
-        <input id="history_q" name="history_q" type="text" value="{{ history_query }}" placeholder="Search your history...">
-        <button class="button button--secondary" type="submit">Filter</button>
+        <div class="history-search">
+            <input id="history_q" name="history_q" type="text" value="{{ history_query }}" placeholder="Search your history...">
+        </div>
+        <button class="button button--primary" type="submit">
+            <span class="button__text">Filter</span>
+            <span class="button__icon" aria-hidden="true">→</span>
+        </button>
     </form>
 
     {% if history_items %}

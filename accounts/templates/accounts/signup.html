@@ -1,0 +1,60 @@
+{% extends "search/base.html" %}
+
+{% block title %}SoClose | Create account{% endblock %}
+
+{% block content %}
+<section class="auth-page">
+    <div class="auth-card">
+        <p class="eyebrow">Get started</p>
+        <h1 class="auth-card__title">Create account</h1>
+
+        <form class="auth-form" method="post" action="{% url 'accounts:signup' %}">
+            {% csrf_token %}
+
+            <label class="auth-field">
+                <span class="auth-field__label">Username</span>
+                <input
+                    class="auth-field__input {% if form.username.errors %}is-error{% endif %}"
+                    type="text" name="username"
+                    value="{{ form.data.username|default:'' }}"
+                    autocomplete="username" autofocus required>
+                {% if form.username.errors %}
+                    <span class="auth-field__error">{{ form.username.errors|join:" " }}</span>
+                {% endif %}
+            </label>
+
+            <label class="auth-field">
+                <span class="auth-field__label">Email <span class="auth-optional">(optional)</span></span>
+                <input
+                    class="auth-field__input {% if form.email.errors %}is-error{% endif %}"
+                    type="email" name="email"
+                    value="{{ form.data.email|default:'' }}"
+                    autocomplete="email">
+                {% if form.email.errors %}
+                    <span class="auth-field__error">{{ form.email.errors|join:" " }}</span>
+                {% endif %}
+            </label>
+
+            <label class="auth-field">
+                <span class="auth-field__label">Password <span class="auth-optional">(min 8 chars)</span></span>
+                <input
+                    class="auth-field__input {% if form.password.errors %}is-error{% endif %}"
+                    type="password" name="password"
+                    autocomplete="new-password" required>
+                {% if form.password.errors %}
+                    <span class="auth-field__error">{{ form.password.errors|join:" " }}</span>
+                {% endif %}
+            </label>
+
+            <button class="button button--primary auth-submit" type="submit">
+                <span class="button__text">Create account</span>
+                <span class="button__icon" aria-hidden="true">→</span>
+            </button>
+        </form>
+
+        <p class="auth-alt">
+            Already have an account? <a href="{% url 'accounts:login' %}">Sign in</a>
+        </p>
+    </div>
+</section>
+{% endblock %}

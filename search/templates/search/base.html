@@ -19,8 +19,24 @@
                     <a class="topnav__link {% if active_page == 'history' %}is-active{% endif %}" href="{% url 'history' %}">History</a>
                     <a class="topnav__link {% if active_page == 'recommended' %}is-active{% endif %}" href="{% url 'recommended' %}">Recommended</a>
                 </nav>
-                <div class="topbar__meta">
-                    <span class="eyebrow eyebrow--quiet">Semantic film intelligence</span>
+                <div class="topbar__actions">
+                    {% if user.is_authenticated %}
+                        {# Avatar button — opens profile panel #}
+                        <button
+                            class="avatar-btn"
+                            id="avatar-btn"
+                            aria-label="Open profile"
+                            aria-expanded="false"
+                            aria-controls="profile-panel"
+                        >
+                            {% with initials=user.profile.get_initials %}
+                                {% if initials %}{{ initials }}{% else %}{{ user.username|slice:":2"|upper }}{% endif %}
+                            {% endwith %}
+                        </button>
+                    {% else %}
+                        <a class="topnav__link" href="{% url 'accounts:login' %}">Sign in</a>
+                        <a class="button button--primary topbar__signup" href="{% url 'accounts:signup' %}">Sign up</a>
+                    {% endif %}
                 </div>
             </div>
         </header>
@@ -29,5 +45,128 @@
             {% block content %}{% endblock %}
         </main>
     </div>
+
+    {% if user.is_authenticated %}
+    {# ── Profile panel ───────────────────────────────────────────────── #}
+    <div class="profile-scrim" id="profile-scrim" aria-hidden="true"></div>
+
+    <aside class="profile-panel" id="profile-panel" role="dialog" aria-modal="true" aria-label="Profile" hidden>
+        <div class="profile-panel__header">
+            <div>
+                <p class="profile-panel__eyebrow">Account</p>
+                <h2 class="profile-panel__name" id="pp-display-name">
+                    {{ user.profile.get_display_name }}
+                </h2>
+            </div>
+            <button class="profile-panel__close" id="profile-close" aria-label="Close profile">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 2l12 12M14 2L2 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="profile-panel__body">
+
+            {# ── Display name ── #}
+            <section class="pp-section">
+                <h3 class="pp-section__title">Display name</h3>
+                <form class="pp-form" id="form-display-name" data-url="{% url 'accounts:update_display_name' %}">
+                    {% csrf_token %}
+                    <div class="pp-field-row">
+                        <input
+                            class="pp-input"
+                            type="text"
+                            name="display_name"
+                            id="pp-input-name"
+                            value="{{ user.profile.display_name }}"
+                            placeholder="Your display name"
+                            maxlength="80"
+                        >
+                        <button class="pp-save-btn" type="submit">Save</button>
+                    </div>
+                    <p class="pp-feedback" id="feedback-display-name" aria-live="polite"></p>
+                </form>
+            </section>
+
+            {# ── Email ── #}
+            <section class="pp-section">
+                <h3 class="pp-section__title">Email</h3>
+                <form class="pp-form" id="form-email" data-url="{% url 'accounts:update_email' %}">
+                    {% csrf_token %}
+                    <div class="pp-field-row">
+                        <input
+                            class="pp-input"
+                            type="email"
+                            name="email"
+                            id="pp-input-email"
+                            value="{{ user.email }}"
+                            placeholder="you@example.com"
+                        >
+                        <button class="pp-save-btn" type="submit">Save</button>
+                    </div>
+                    <p class="pp-feedback" id="feedback-email" aria-live="polite"></p>
+                </form>
+            </section>
+
+            {# ── Password ── #}
+            <section class="pp-section">
+                <h3 class="pp-section__title">Password</h3>
+                <form class="pp-form" id="form-password" data-url="{% url 'accounts:update_password' %}">
+                    {% csrf_token %}
+                    <label class="pp-label">Current password
+                        <input class="pp-input" type="password" name="old_password" autocomplete="current-password" required>
+                    </label>
+                    <label class="pp-label">New password
+                        <input class="pp-input" type="password" name="new_password1" autocomplete="new-password" required>
+                    </label>
+                    <label class="pp-label">Confirm new password
+                        <input class="pp-input" type="password" name="new_password2" autocomplete="new-password" required>
+                    </label>
+                    <button class="pp-save-btn pp-save-btn--full" type="submit">Update password</button>
+                    <p class="pp-feedback" id="feedback-password" aria-live="polite"></p>
+                </form>
+            </section>
+
+        </div>
+
+        {# ── Account actions ── #}
+        <div class="profile-panel__footer">
+            <form method="post" action="{% url 'accounts:logout' %}">
+                {% csrf_token %}
+                <button class="pp-action-btn pp-action-btn--logout" type="submit">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+                    </svg>
+                    Log out
+                </button>
+            </form>
+
+            <button class="pp-action-btn pp-action-btn--danger" id="btn-delete-account">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+                Delete account
+            </button>
+        </div>
+    </aside>
+
+    {# ── Delete confirmation dialog ── #}
+    <div class="pp-delete-dialog" id="delete-dialog" hidden role="dialog" aria-modal="true" aria-label="Delete account">
+        <div class="pp-delete-dialog__card">
+            <h3 class="pp-delete-dialog__title">Delete account</h3>
+            <p class="pp-delete-dialog__copy">This will permanently remove your account and all history. Type <strong>DELETE</strong> to confirm.</p>
+            <form class="pp-form" id="form-delete" data-url="{% url 'accounts:delete_account' %}">
+                {% csrf_token %}
+                <input class="pp-input" type="text" name="confirm" placeholder="DELETE" autocomplete="off">
+                <p class="pp-feedback" id="feedback-delete" aria-live="polite"></p>
+                <div class="pp-delete-dialog__actions">
+                    <button class="pp-action-btn pp-action-btn--neutral" type="button" id="btn-cancel-delete">Cancel</button>
+                    <button class="pp-action-btn pp-action-btn--danger" type="submit">Delete permanently</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
 </body>
 </html>

@@ -22,6 +22,7 @@ from django.urls import include, path, re_path
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("", include("accounts.urls", namespace="accounts")),
     path("", include("search.urls")),
     re_path(r"^static/(?P<path>.*)$", serve, {"insecure": True}),
 ]
