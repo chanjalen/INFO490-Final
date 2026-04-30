@@ -1,7 +1,8 @@
 from django.test import TestCase
 from django.urls import reverse
+from django.contrib.auth.models import User
 
-from .models import Movie
+from .models import Movie, SearchRecord
 
 
 class SearchViewsTests(TestCase):
@@ -97,3 +98,22 @@ class SearchViewsTests(TestCase):
         response = self.client.get(reverse("movie_detail", args=[primary.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Related titles")
+
+    def test_analytics_keywords_filter_query_structure_labels(self):
+        user = User.objects.create_user(username="analytics-user", password="pass12345")
+        SearchRecord.objects.create(
+            user=user,
+            query="Character: lonely wizard; Scene: rainy station; Plot: hidden memory",
+            focus="Character",
+            result_count=2,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("analytics_data"))
+        self.assertEqual(response.status_code, 200)
+        words = {item["word"] for item in response.json()["keywords"]}
+
+        self.assertTrue({"lonely", "wizard", "rainy", "station", "hidden", "memory"} & words)
+        self.assertNotIn("character", words)
+        self.assertNotIn("scene", words)
+        self.assertNotIn("plot", words)

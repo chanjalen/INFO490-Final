@@ -1914,3 +1914,109 @@ img {
     flex-wrap: wrap;
     padding-top: 2px;
 }
+
+/* ── Analytics page ───────────────────────────────────────────── */
+.analytics-stat-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.analytics-stat {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 20px 28px;
+    text-align: center;
+    min-width: 130px;
+    flex: 1;
+    max-width: 200px;
+}
+
+.analytics-stat__value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 4px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.analytics-stat__label {
+    font-size: 0.75rem;
+    color: var(--ink-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.analytics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 780px) {
+    .analytics-grid { grid-template-columns: 1fr; }
+}
+
+.analytics-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+}
+
+.analytics-card--wide {
+    grid-column: 1 / -1;
+}
+
+.analytics-card__title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 2px;
+}
+
+.analytics-card__sub {
+    font-size: 0.8rem;
+    color: var(--ink-subtle);
+    margin-bottom: 20px;
+}
+
+.analytics-chart-wrap {
+    position: relative;
+}
+
+.analytics-chart-wrap--donut { height: 260px; }
+.analytics-chart-wrap--bar   { height: 320px; }
+
+.analytics-word-cloud {
+    position: relative;
+    min-height: 280px;
+    overflow: hidden;
+    border: 1px solid rgba(159, 191, 110, 0.24);
+    border-radius: var(--radius-md);
+    background: rgba(250, 252, 243, 0.62);
+}
+
+.analytics-word {
+    line-height: 1;
+    letter-spacing: -0.02em;
+    user-select: none;
+    cursor: default;
+    transition: opacity 0.15s;
+}
+
+.analytics-word:hover { opacity: 0.72; }
+
+.analytics-word-cloud--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6f6a62;
+    font-size: 0.92rem;
+}

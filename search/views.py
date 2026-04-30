@@ -1,6 +1,11 @@
+from collections import Counter
+import re
+
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 
-from .models import Movie
+from .models import Movie, SearchRecord
 from accounts.models import WatchlistItem
 from .services import (
     get_filter_options,
@@ -44,6 +49,7 @@ def results(request):
     movies = search_movies(query=query, genre=genre, language=language, year=year)
     has_search = any([query, genre, language, year])
     if has_search:
+        count = movies.count()
         record_search(
             request,
             query=query,
@@ -51,8 +57,18 @@ def results(request):
             language=language,
             year=year,
             focus=focus,
-            result_count=movies.count(),
+            result_count=count,
         )
+        if request.user.is_authenticated:
+            SearchRecord.objects.create(
+                user=request.user,
+                query=query,
+                focus=focus,
+                genre=genre,
+                language=language,
+                year=year,
+                result_count=count,
+            )
 
     return render(
         request,
@@ -120,4 +136,62 @@ def movie_detail(request, movie_id):
             "movie": movie,
             "related_movies": related_movies,
         },
+    )
+
+
+@login_required
+def analytics(request):
+    total = SearchRecord.objects.filter(user=request.user).count()
+    return render(
+        request,
+        "search/analytics.html",
+        {
+            "active_page": "analytics",
+            "total_searches": total,
+        },
+    )
+
+
+@login_required
+def analytics_data(request):
+    records = SearchRecord.objects.filter(user=request.user)
+
+    # Category distribution
+    focus_counts: dict[str, int] = {}
+    for rec in records.exclude(focus="").values_list("focus", flat=True):
+        focus_counts[rec] = focus_counts.get(rec, 0) + 1
+
+    # Top keywords (stop-word filtered)
+    _STOP = {
+        "the", "a", "an", "in", "on", "at", "is", "was", "were", "are",
+        "be", "to", "of", "and", "or", "with", "for", "from", "that",
+        "this", "it", "he", "she", "his", "her", "they", "who", "what",
+    }
+    _STRUCTURE_LABELS = {
+        "actor", "age", "appearance", "character", "charname", "dialogue",
+        "gender", "hair", "name", "object", "place", "plot", "relationship",
+        "role", "scene", "scence", "setting", "time", "twist", "visual",
+    }
+    tokens: list[str] = []
+    for q in records.exclude(query="").values_list("query", flat=True):
+        for raw_token in re.findall(r"[A-Za-z][A-Za-z'-]*:?", q):
+            token = raw_token.lower().strip("'")
+            is_structure_label = token.endswith(":") and token[:-1] in _STRUCTURE_LABELS
+            token = token.rstrip(":")
+            if (
+                is_structure_label
+                or len(token) <= 2
+                or token in _STOP
+                or token in _STRUCTURE_LABELS
+            ):
+                continue
+            tokens.append(token)
+    keyword_counts = Counter(tokens).most_common(20)
+
+    return JsonResponse(
+        {
+            "categories": focus_counts,
+            "keywords": [{"word": w, "count": c} for w, c in keyword_counts],
+            "total": records.count(),
+        }
     )

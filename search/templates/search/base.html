@@ -6,8 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SoClose{% endblock %}</title>
     <meta name="description" content="Semantic film search for finding movies from partial memories, scenes, characters, and story clues.">
-    <link rel="stylesheet" href="{% static 'search/app.css' %}?v=20260430-4">
-    <script defer src="{% static 'search/app.js' %}?v=20260430-4"></script>
+    <link rel="stylesheet" href="{% static 'search/app.css' %}?v=20260430-5">
+    <script defer src="{% static 'search/app.js' %}?v=20260430-5"></script>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
     <div class="site-shell">
@@ -74,6 +75,13 @@
                         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                     </svg>
                     My Watchlist
+                    <span class="pp-nav-link__arrow" aria-hidden="true">→</span>
+                </a>
+                <a class="pp-nav-link" href="{% url 'analytics' %}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 20V10M12 20V4M6 20v-6"/>
+                    </svg>
+                    Search Analytics
                     <span class="pp-nav-link__arrow" aria-hidden="true">→</span>
                 </a>
             </section>

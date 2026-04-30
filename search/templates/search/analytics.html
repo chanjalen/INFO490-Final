@@ -1,0 +1,320 @@
+{% extends "search/base.html" %}
+
+{% block title %}SoClose | Search Analytics{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<section class="stack stack--narrow">
+    <div class="section-intro section-intro--center">
+        <p class="eyebrow">Insights</p>
+        <h1 class="section-title">Search Analytics</h1>
+        <p class="section-copy">A breakdown of your search habits — which categories you use and what you look for most.</p>
+    </div>
+
+    {% if total_searches == 0 %}
+        <div class="empty-state">
+            <p class="empty-state__title">No search data yet.</p>
+            <p class="empty-state__copy">Run a few searches while signed in and your analytics will appear here.</p>
+        </div>
+    {% else %}
+        <div class="analytics-stat-row">
+            <div class="analytics-stat">
+                <span class="analytics-stat__value" id="stat-total">{{ total_searches }}</span>
+                <span class="analytics-stat__label">Total searches</span>
+            </div>
+            <div class="analytics-stat">
+                <span class="analytics-stat__value" id="stat-top-category">—</span>
+                <span class="analytics-stat__label">Favourite category</span>
+            </div>
+            <div class="analytics-stat">
+                <span class="analytics-stat__value" id="stat-top-keyword">—</span>
+                <span class="analytics-stat__label">Top keyword</span>
+            </div>
+        </div>
+
+        <div class="analytics-grid">
+            <div class="analytics-card">
+                <h2 class="analytics-card__title">Category Distribution</h2>
+                <p class="analytics-card__sub">Which search type you reach for most</p>
+                <div class="analytics-chart-wrap analytics-chart-wrap--donut">
+                    <canvas id="chart-category" aria-label="Category distribution donut chart"></canvas>
+                </div>
+            </div>
+
+            <div class="analytics-card">
+                <h2 class="analytics-card__title">Top Keywords</h2>
+                <p class="analytics-card__sub">Most frequent words across all your searches</p>
+                <div class="analytics-chart-wrap analytics-chart-wrap--bar">
+                    <canvas id="chart-keywords" aria-label="Top keywords bar chart"></canvas>
+                </div>
+            </div>
+
+            <div class="analytics-card analytics-card--wide">
+                <h2 class="analytics-card__title">Keyword Cloud</h2>
+                <p class="analytics-card__sub">A softer view of the words that appear most often</p>
+                <div class="analytics-word-cloud" id="keyword-cloud" aria-label="Top keywords word cloud"></div>
+            </div>
+        </div>
+    {% endif %}
+</section>
+
+<script>
+(function () {
+    const API_URL = "{% url 'analytics_data' %}";
+    const CATEGORY_COLORS = {
+        "Scene":     "#9FBF6E",
+        "Plot":      "#7FA36A",
+        "Character": "#C6CF9A",
+        "Dialogue":  "#B8C978",
+        "Visual":    "#DCE6C3",
+    };
+    const DEFAULT_COLOR = "#AFC681";
+    const BAR_LOW = [220, 230, 195];
+    const BAR_HIGH = [110, 143, 78];
+
+    function interpolateGreen(value, min, max) {
+        const ratio = max === min ? 0.55 : (value - min) / (max - min);
+        const rgb = BAR_LOW.map((low, index) => {
+            const high = BAR_HIGH[index];
+            return Math.round(low + (high - low) * ratio);
+        });
+        return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    }
+
+    function renderWordCloud(keywords) {
+        const cloud = document.getElementById("keyword-cloud");
+        if (!cloud) return;
+
+        if (!keywords.length) {
+            cloud.textContent = "No keyword data yet.";
+            cloud.classList.add("analytics-word-cloud--empty");
+            return;
+        }
+
+        // Sort largest → smallest so biggest word is placed first at center
+        const sorted = [...keywords].sort((a, b) => b.count - a.count);
+        const minCount = sorted[sorted.length - 1].count;
+        const maxCount = sorted[0].count;
+        const range = maxCount - minCount || 1;
+
+        const W = cloud.offsetWidth || 580;
+        const H = 280;
+        cloud.style.height = H + "px";
+
+        const MIN_FONT = 12;   // px
+        const MAX_FONT = 44;   // px
+        const PAD = 6;         // collision padding around each word box
+        // Spiral parameters
+        const STEP = 0.16;     // radians per iteration
+        const GROWTH = 4.2;    // px of radius per radian
+        // Golden angle offset: each word's spiral starts at a different direction
+        // giving an even, phyllotaxis-like spread
+        const GOLDEN = 2.3999; // ≈ 137.5° in radians
+
+        function fontSize(count) {
+            return MIN_FONT + ((count - minCount) / range) * (MAX_FONT - MIN_FONT);
+        }
+        function fontWeight(ratio) {
+            return ratio > 0.66 ? 700 : ratio > 0.33 ? 600 : 500;
+        }
+        function color(ratio) {
+            if (ratio > 0.66) return "#4F5F3A";
+            if (ratio > 0.33) return "#6E8F4E";
+            return "#9FBF6E";
+        }
+        // Slight rotation for non-center words; deterministic so layout is stable
+        const ROT_TABLE = [0, -6, 5, -8, 4, 7, -5, 6, -4, 8, -3, 3, 0, -6, 5];
+
+        // Use an off-screen canvas to measure actual text widths
+        const cvs = document.createElement("canvas");
+        const ctx = cvs.getContext("2d");
+        function measure(text, size, weight) {
+            ctx.font = `${weight} ${size}px Inter, sans-serif`;
+            return { w: ctx.measureText(text).width, h: size * 1.2 };
+        }
+
+        cloud.innerHTML = "";
+
+        const cx = W / 2;
+        const cy = H / 2;
+        const boxes = [];   // placed bounding boxes: {x, y, x2, y2}
+
+        function fits(x, y, bw, bh) {
+            if (x < PAD || y < PAD || x + bw > W - PAD || y + bh > H - PAD) return false;
+            for (const b of boxes) {
+                if (x < b.x2 && x + bw > b.x && y < b.y2 && y + bh > b.y) return false;
+            }
+            return true;
+        }
+
+        sorted.slice(0, 28).forEach((kw, i) => {
+            const ratio = (kw.count - minCount) / range;
+            const fs   = fontSize(kw.count);
+            const fw   = fontWeight(ratio);
+            const rot  = i === 0 ? 0 : ROT_TABLE[i % ROT_TABLE.length];
+            const { w, h } = measure(kw.word, fs, fw);
+            const bw = w + PAD * 2;
+            const bh = h + PAD * 2;
+
+            let px = null, py = null;
+
+            if (i === 0) {
+                // Largest word: place at exact center
+                px = cx - bw / 2;
+                py = cy - bh / 2;
+            } else {
+                // Archimedean spiral, starting direction offset by golden angle × index
+                const startAngle = i * GOLDEN;
+                for (let t = 0; t < 3000; t++) {
+                    const angle = startAngle + STEP * t;
+                    const r = GROWTH * (STEP * t);   // radius grows with arc length
+                    const tx = cx + r * Math.cos(angle) - bw / 2;
+                    const ty = cy + r * Math.sin(angle) - bh / 2;
+                    if (fits(tx, ty, bw, bh)) { px = tx; py = ty; break; }
+                }
+            }
+
+            if (px === null) return;   // no room found; skip word
+
+            boxes.push({ x: px, y: py, x2: px + bw, y2: py + bh });
+
+            const span = document.createElement("span");
+            span.textContent = kw.word;
+            span.className = "analytics-word";
+            Object.assign(span.style, {
+                position:      "absolute",
+                left:          (px + PAD) + "px",
+                top:           (py + PAD) + "px",
+                fontSize:      fs + "px",
+                fontWeight:    fw,
+                color:         color(ratio),
+                whiteSpace:    "nowrap",
+                transform:     rot ? `rotate(${rot}deg)` : "",
+                transformOrigin: "center center",
+            });
+            cloud.appendChild(span);
+        });
+    }
+
+    async function load() {
+        let data;
+        try {
+            const res = await fetch(API_URL);
+            data = await res.json();
+        } catch (e) {
+            return;
+        }
+
+        const { categories, keywords, total } = data;
+
+        // Stat badges
+        const topCat = Object.entries(categories).sort((a, b) => b[1] - a[1])[0];
+        if (topCat) {
+            document.getElementById("stat-top-category").textContent = topCat[0];
+        }
+        if (keywords.length) {
+            document.getElementById("stat-top-keyword").textContent = keywords[0].word;
+        }
+        renderWordCloud(keywords);
+
+        // Donut chart – category distribution
+        const catLabels = Object.keys(categories);
+        const catValues = Object.values(categories);
+        const catColors = catLabels.map(l => CATEGORY_COLORS[l] || DEFAULT_COLOR);
+
+        if (catLabels.length) {
+            new Chart(document.getElementById("chart-category"), {
+                type: "doughnut",
+                data: {
+                    labels: catLabels,
+                    datasets: [{
+                        data: catValues,
+                        backgroundColor: catColors,
+                        borderWidth: 2,
+                        borderColor: "#171717",
+                        hoverOffset: 8,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: "bottom",
+                            labels: {
+                                color: "#4B5563",
+                                padding: 16,
+                                font: { family: "Inter, sans-serif", size: 13 },
+                                boxWidth: 12,
+                                borderRadius: 3,
+                            },
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` ${ctx.label}: ${ctx.parsed} search${ctx.parsed !== 1 ? "es" : ""}`,
+                            },
+                        },
+                    },
+                    cutout: "62%",
+                },
+            });
+        } else {
+            document.getElementById("chart-category").closest(".analytics-card").querySelector(".analytics-card__sub").textContent = "No category data yet.";
+        }
+
+        // Horizontal bar chart – top keywords
+        if (keywords.length) {
+            const kLabels = keywords.map(k => k.word);
+            const kValues = keywords.map(k => k.count);
+            const minKeyword = Math.min(...kValues);
+            const maxKeyword = Math.max(...kValues);
+            const kColors = kValues.map(value => interpolateGreen(value, minKeyword, maxKeyword));
+            new Chart(document.getElementById("chart-keywords"), {
+                type: "bar",
+                data: {
+                    labels: kLabels,
+                    datasets: [{
+                        label: "Occurrences",
+                        data: kValues,
+                        backgroundColor: kColors,
+                        borderColor: "#9FBF6E",
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    }],
+                },
+                options: {
+                    indexAxis: "y",
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` ${ctx.parsed.x} time${ctx.parsed.x !== 1 ? "s" : ""}`,
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: "#a3a3a3", font: { size: 12 } },
+                            grid: { color: "rgba(230, 234, 217, 0.58)" },
+                        },
+                        y: {
+                            ticks: { color: "#4B5563", font: { family: "Inter, sans-serif", size: 13 } },
+                            grid: { display: false },
+                        },
+                    },
+                },
+            });
+        } else {
+            document.getElementById("chart-keywords").closest(".analytics-card").querySelector(".analytics-card__sub").textContent = "No keyword data yet.";
+        }
+    }
+
+    load();
+})();
+</script>
+{% endblock %}

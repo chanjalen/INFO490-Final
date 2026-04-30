@@ -8,6 +8,12 @@
         <p class="eyebrow">Your journey</p>
         <h1 class="section-title">Search History</h1>
         <p class="section-copy">Every clue you have tried, kept in one place so you can quickly revisit promising leads.</p>
+        {% if user.is_authenticated %}
+        <a class="button button--secondary" href="{% url 'analytics' %}" style="margin-top:1rem;display:inline-flex;align-items:center;gap:.4rem;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            View Analytics
+        </a>
+        {% endif %}
     </div>
 
     <form class="history-search-bar" method="get" action="{% url 'history' %}">
