@@ -1,2 +1,4 @@
 django>=6.0
 python-dotenv
+gunicorn>=21.0
+whitenoise>=6.0

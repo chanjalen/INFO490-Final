@@ -1,144 +1,92 @@
 <section class="search-panel" data-search-panel>
-    <form method="get" action="{% url 'results' %}" class="search-panel__form">
-        <!-- Progress indicator -->
-        <div class="search-panel__progress">
-            <div class="progress-stage" data-stage="focus">
-                <div class="progress-dot" data-stage="focus"></div>
-                <span class="progress-label">Focus</span>
-            </div>
-            <div class="progress-connector" data-connected="false"></div>
-            <div class="progress-stage" data-stage="query">
-                <div class="progress-dot" data-stage="query"></div>
-                <span class="progress-label">Query</span>
-            </div>
-            <div class="progress-connector" data-connected="false"></div>
-            <div class="progress-stage" data-stage="search">
-                <div class="progress-dot" data-stage="search"></div>
-                <span class="progress-label">Search</span>
-            </div>
-        </div>
+    <form method="get" action="{% url 'results' %}" class="search-panel__form" id="sp-form">
 
-        <!-- Breadcrumb navigation -->
-        <div class="search-panel__breadcrumb" data-breadcrumb-container>
-            <div class="breadcrumb-trail">
-                <span class="breadcrumb-item breadcrumb-item--root" data-breadcrumb-type="root">Search</span>
-                <span class="breadcrumb-separator" aria-hidden="true">/</span>
-                <span class="breadcrumb-item breadcrumb-item--focus" data-breadcrumb-type="focus" style="display: none;"></span>
-                <span class="breadcrumb-separator" style="display: none;" data-breadcrumb-sep="focus-drill" aria-hidden="true">/</span>
-                <span class="breadcrumb-item breadcrumb-item--drill" data-breadcrumb-type="drill" style="display: none;"></span>
-                <button class="breadcrumb-clear" type="button" data-breadcrumb-clear style="display: none;" aria-label="Clear selection">×</button>
-            </div>
-        </div>
+        <!-- Search card: zones A + B + C -->
+        <div class="sp-zone-wrapper">
 
-        <!-- Hidden inputs for tracking state -->
-        <input type="hidden" name="focus" value="{{ focus|default:'' }}" data-focus-input>
-        <input type="hidden" name="drill" value="" data-drill-input>
-        <input type="hidden" name="saved_group" value="" data-saved-group-input>
+            <!-- Zone A: committed pending pills -->
+            <div class="sp-pills-zone" id="sp-pills-zone"></div>
+            <hr class="sp-zone-divider" id="sp-zone-divider">
 
-        <!-- Main search bar -->
-        <div class="search-panel__bar">
-            <label class="sr-only" for="movie-query">Movie search</label>
-            <div class="search-panel__input-wrap">
-                <span class="search-panel__icon" aria-hidden="true">&#8981;</span>
-                <input
-                    id="movie-query"
-                    class="search-panel__input"
-                    type="text"
-                    name="q"
-                    value="{{ query|default:'' }}"
-                    placeholder="What do you remember?"
-                    autocomplete="off"
-                    data-search-input
-                >
-            </div>
-            <button class="button button--primary" type="submit" data-search-button>
-                <span class="button__text">Find</span>
-                <span class="button__icon" aria-hidden="true">→</span>
-            </button>
-        </div>
-
-        <!-- Primary categories (Level 1) -->
-        <div class="search-panel__categories">
-            <span class="search-panel__label">Focus</span>
-            <div class="chip-list">
-                {% for category in categories %}
-                    <button
-                        class="chip {% if focus == category.name %}is-active{% endif %}"
-                        type="button"
-                        data-focus-chip
-                        data-focus-name="{{ category.name }}"
-                        data-focus-placeholder="{{ category.placeholder }}"
+            <!-- Zone B: breadcrumb path + input + buttons -->
+            <div class="sp-bar">
+                <span class="sp-icon" aria-hidden="true">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                    </svg>
+                </span>
+                <div class="sp-bc-row">
+                    <div class="sp-bc-path" id="sp-bc-path"></div>
+                    <input
+                        class="sp-input"
+                        id="sp-input"
+                        placeholder="What do you remember?"
+                        autocomplete="off"
                     >
-                        {{ category.name }}
-                    </button>
-                {% endfor %}
-            </div>
-        </div>
-
-        <!-- Secondary categories (Level 2 - Drilldown) -->
-        <div class="search-panel__drill-down" data-drill-container style="display: none;">
-            <span class="search-panel__label" data-drill-label></span>
-            <div class="chip-list" data-drill-chips></div>
-        </div>
-
-        <!-- Context helper text -->
-        <div class="search-panel__helper">
-            {% for category in categories %}
-                <div class="search-panel__helper-copy {% if focus == category.name %}is-active{% endif %}" data-focus-copy="{{ category.name }}">
-                    <p class="helper-main">{{ category.description }}</p>
-                    <p class="helper-tip" data-helper-tip="{{ category.name }}" style="display: none;"></p>
                 </div>
-            {% endfor %}
-            <div class="search-panel__helper-copy {% if not focus %}is-active{% endif %}" data-focus-copy="default">
-                <p class="helper-main">Start broad, then narrow with genre, language, or release year if you already know part of the answer.</p>
+                <button class="sp-semicolon-btn" id="sp-semicolon-btn" type="button" title="Add another at this level ( ; )">;</button>
+                <button class="sp-action-btn sp-action-btn--add" id="sp-action-btn" type="button">
+                    <span id="sp-action-label">Add</span>
+                </button>
             </div>
+
+            <p class="sp-hint" id="sp-hint">
+                Press <strong>;</strong> to add another &nbsp;·&nbsp;
+                <strong>Enter</strong> to save &nbsp;·&nbsp;
+                <strong>Esc</strong> to go back
+            </p>
+
+            <!-- Zone C: navigation chips -->
+            <hr class="sp-chips-divider">
+            <div class="sp-chips-zone" id="sp-chips-zone"></div>
         </div>
 
-        <!-- Saved query groups -->
-        <div class="search-panel__groups" data-groups-container style="display: none;">
-            <span class="search-panel__label">Recent Searches</span>
-            <div class="groups-list" data-groups-list></div>
-            <button class="button button--secondary button--small" type="button" data-save-group-btn>
-                <span>Save This Search</span>
-            </button>
-        </div>
+        <!-- Hidden fields submitted to Django -->
+        <input type="hidden" name="q" id="sp-q">
+        <input type="hidden" name="focus" id="sp-focus">
 
+        <!-- Filter bar -->
         <div class="filter-bar">
             <div class="filter-bar__intro">
-                <span class="pill pill--dark">Filters</span>
+                <button class="pill pill--dark filter-bar__toggle" type="button" id="filter-toggle" aria-expanded="false" aria-controls="filter-grid">
+                    Filters
+                    <svg class="filter-bar__chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
             </div>
-
-            <div class="filter-grid">
-                <label class="filter">
-                    <span class="filter__label">Genre</span>
-                    <select class="filter__select" name="genre" data-filter-select="genre">
+            <div class="filter-grid" id="filter-grid" hidden>
+                <div class="filter">
+                    <span class="filter__label" id="filter-label-genre">Genre</span>
+                    <select class="filter__select" name="genre" data-filter-select="genre" aria-labelledby="filter-label-genre">
                         <option value="">Any genre</option>
                         {% for genre in filters.genres %}
                             <option value="{{ genre }}" {% if selected_genre == genre %}selected{% endif %}>{{ genre }}</option>
                         {% endfor %}
                     </select>
-                </label>
-
-                <label class="filter">
-                    <span class="filter__label">Language</span>
-                    <select class="filter__select" name="language" data-filter-select="language">
+                </div>
+                <div class="filter">
+                    <span class="filter__label" id="filter-label-language">Language</span>
+                    <select class="filter__select" name="language" data-filter-select="language" aria-labelledby="filter-label-language">
                         <option value="">Any language</option>
                         {% for language in filters.languages %}
                             <option value="{{ language }}" {% if selected_language == language %}selected{% endif %}>{{ language }}</option>
                         {% endfor %}
                     </select>
-                </label>
-
-                <label class="filter">
-                    <span class="filter__label">Year</span>
-                    <select class="filter__select" name="year" data-filter-select="year">
+                </div>
+                <div class="filter">
+                    <span class="filter__label" id="filter-label-year">Year</span>
+                    <select class="filter__select" name="year" data-filter-select="year" aria-labelledby="filter-label-year">
                         <option value="">Any year</option>
                         {% for year in filters.years %}
                             <option value="{{ year }}" {% if selected_year|stringformat:'s' == year|stringformat:'s' %}selected{% endif %}>{{ year }}</option>
                         {% endfor %}
                     </select>
-                </label>
+                </div>
             </div>
         </div>
     </form>
+
+    <!-- Saved groups rendered by JS, outside the form -->
+    <div class="sp-groups" id="sp-groups"></div>
 </section>

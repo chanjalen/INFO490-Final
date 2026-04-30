@@ -1,0 +1,36 @@
+{% extends "search/base.html" %}
+
+{% block title %}SoClose | Sign in{% endblock %}
+
+{% block content %}
+<section class="auth-page">
+    <div class="auth-card">
+        <p class="eyebrow">Welcome back</p>
+        <h1 class="auth-card__title">Sign in</h1>
+
+        {% if error %}
+            <p class="auth-error">{{ error }}</p>
+        {% endif %}
+
+        <form class="auth-form" method="post" action="{% url 'accounts:login' %}{% if request.GET.next %}?next={{ request.GET.next }}{% endif %}">
+            {% csrf_token %}
+            <label class="auth-field">
+                <span class="auth-field__label">Username</span>
+                <input class="auth-field__input" type="text" name="username" autocomplete="username" autofocus required>
+            </label>
+            <label class="auth-field">
+                <span class="auth-field__label">Password</span>
+                <input class="auth-field__input" type="password" name="password" autocomplete="current-password" required>
+            </label>
+            <button class="button button--primary auth-submit" type="submit">
+                <span class="button__text">Sign in</span>
+                <span class="button__icon" aria-hidden="true">→</span>
+            </button>
+        </form>
+
+        <p class="auth-alt">
+            No account? <a href="{% url 'accounts:signup' %}">Create one</a>
+        </p>
+    </div>
+</section>
+{% endblock %}

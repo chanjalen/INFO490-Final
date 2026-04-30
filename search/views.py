@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404, render
 
 from .models import Movie
+from accounts.models import WatchlistItem
 from .services import (
     get_filter_options,
     get_recommendations,
@@ -9,6 +10,16 @@ from .services import (
     record_search,
     search_movies,
 )
+
+
+def _watchlist_ids(request):
+    """Return a set of movie PKs in the current user's watchlist, or empty set."""
+    if request.user.is_authenticated:
+        return set(
+            WatchlistItem.objects.filter(user=request.user)
+            .values_list("movie_id", flat=True)
+        )
+    return set()
 
 
 def home(request):
@@ -57,6 +68,7 @@ def results(request):
             "selected_year": year,
             "movies": movies,
             "has_search": has_search,
+            "watchlist_ids": _watchlist_ids(request),
         },
     )
 
@@ -86,6 +98,7 @@ def recommended(request):
             "active_page": "recommended",
             "recommendations": recommendations,
             "based_on_history": based_on_history,
+            "watchlist_ids": _watchlist_ids(request),
         },
     )
 

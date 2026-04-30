@@ -27,6 +27,10 @@ env/
 .vscode/
 *.iml
 
+# Codex
+.codex-local/
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
