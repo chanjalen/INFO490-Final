@@ -17,9 +17,29 @@
             <h3 class="movie-card__title">{{ movie.title }}</h3>
             <p class="movie-card__subtitle">
                 {% if movie.release_year %}{{ movie.release_year }}{% else %}Year unknown{% endif %}
-                {% if movie.cast %} - {{ movie.cast|truncatechars:48 }}{% endif %}
+                {% if movie.cast %} · {{ movie.cast|truncatechars:48 }}{% endif %}
             </p>
             <p class="movie-card__synopsis">{{ movie.synopsis|default:"No synopsis available yet."|truncatewords:28 }}</p>
         </div>
     </a>
+
+    {% if request.user.is_authenticated %}
+    <div class="movie-card__footer">
+        <button
+            class="wl-btn {% if movie.id in watchlist_ids %}wl-btn--active{% endif %}"
+            data-movie-id="{{ movie.id }}"
+            data-url="{% url 'accounts:toggle_watchlist' movie.id %}"
+            aria-label="{% if movie.id in watchlist_ids %}Remove from watchlist{% else %}Add to watchlist{% endif %}"
+            aria-pressed="{% if movie.id in watchlist_ids %}true{% else %}false{% endif %}"
+        >
+            <svg class="wl-btn__icon" width="13" height="13" viewBox="0 0 24 24" fill="{% if movie.id in watchlist_ids %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span class="wl-btn__label">{% if movie.id in watchlist_ids %}Added{% else %}Watchlist{% endif %}</span>
+        </button>
+        <a class="wl-detail-link" href="{% url 'movie_detail' movie.id %}">
+            Detail <span aria-hidden="true">→</span>
+        </a>
+    </div>
+    {% endif %}
 </article>

@@ -48,36 +48,41 @@
         <!-- Filter bar -->
         <div class="filter-bar">
             <div class="filter-bar__intro">
-                <span class="pill pill--dark">Filters</span>
+                <button class="pill pill--dark filter-bar__toggle" type="button" id="filter-toggle" aria-expanded="false" aria-controls="filter-grid">
+                    Filters
+                    <svg class="filter-bar__chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
             </div>
-            <div class="filter-grid">
-                <label class="filter">
-                    <span class="filter__label">Genre</span>
-                    <select class="filter__select" name="genre" data-filter-select="genre">
+            <div class="filter-grid" id="filter-grid" hidden>
+                <div class="filter">
+                    <span class="filter__label" id="filter-label-genre">Genre</span>
+                    <select class="filter__select" name="genre" data-filter-select="genre" aria-labelledby="filter-label-genre">
                         <option value="">Any genre</option>
                         {% for genre in filters.genres %}
                             <option value="{{ genre }}" {% if selected_genre == genre %}selected{% endif %}>{{ genre }}</option>
                         {% endfor %}
                     </select>
-                </label>
-                <label class="filter">
-                    <span class="filter__label">Language</span>
-                    <select class="filter__select" name="language" data-filter-select="language">
+                </div>
+                <div class="filter">
+                    <span class="filter__label" id="filter-label-language">Language</span>
+                    <select class="filter__select" name="language" data-filter-select="language" aria-labelledby="filter-label-language">
                         <option value="">Any language</option>
                         {% for language in filters.languages %}
                             <option value="{{ language }}" {% if selected_language == language %}selected{% endif %}>{{ language }}</option>
                         {% endfor %}
                     </select>
-                </label>
-                <label class="filter">
-                    <span class="filter__label">Year</span>
-                    <select class="filter__select" name="year" data-filter-select="year">
+                </div>
+                <div class="filter">
+                    <span class="filter__label" id="filter-label-year">Year</span>
+                    <select class="filter__select" name="year" data-filter-select="year" aria-labelledby="filter-label-year">
                         <option value="">Any year</option>
                         {% for year in filters.years %}
                             <option value="{{ year }}" {% if selected_year|stringformat:'s' == year|stringformat:'s' %}selected{% endif %}>{{ year }}</option>
                         {% endfor %}
                     </select>
-                </label>
+                </div>
             </div>
         </div>
     </form>

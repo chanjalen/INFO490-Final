@@ -19,7 +19,7 @@ from .forms import (
     PasswordChangeForm,
     SignupForm,
 )
-from .models import UserProfile
+from .models import UserProfile, WatchlistItem
 
 
 # ── Public auth views ─────────────────────────────────────────────────────
@@ -45,11 +45,16 @@ def signup_view(request):
     form = SignupForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         from django.contrib.auth.models import User
-        user = User.objects.create_user(
-            username=form.cleaned_data["username"],
-            email=form.cleaned_data.get("email", ""),
-            password=form.cleaned_data["password"],
-        )
+        from django.db import IntegrityError
+        try:
+            user = User.objects.create_user(
+                username=form.cleaned_data["username"],
+                email=form.cleaned_data.get("email", ""),
+                password=form.cleaned_data["password"],
+            )
+        except IntegrityError:
+            form.add_error("username", "That username is already taken.")
+            return render(request, "accounts/signup.html", {"form": form})
         login(request, user)
         return redirect("home")
     return render(request, "accounts/signup.html", {"form": form})
@@ -117,3 +122,42 @@ def delete_account(request):
         user.delete()
         return JsonResponse({"ok": True})
     return JsonResponse({"ok": False, "errors": _json_errors(form)}, status=400)
+
+
+# ── Watchlist ─────────────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def toggle_watchlist(request, movie_id):
+    from django.shortcuts import get_object_or_404
+    from search.models import Movie
+
+    movie = get_object_or_404(Movie, pk=movie_id)
+    item, created = WatchlistItem.objects.get_or_create(
+        user=request.user, movie=movie
+    )
+    if not created:
+        item.delete()
+        in_list = False
+    else:
+        in_list = True
+    count = request.user.watchlist.count()
+    return JsonResponse({"ok": True, "in_list": in_list, "count": count})
+
+
+@login_required
+def watchlist_page(request):
+    items = (
+        WatchlistItem.objects.filter(user=request.user)
+        .select_related("movie")
+    )
+    watchlist_ids = set(items.values_list("movie_id", flat=True))
+    return render(
+        request,
+        "accounts/watchlist.html",
+        {
+            "active_page": "watchlist",
+            "items": items,
+            "watchlist_ids": watchlist_ids,
+        },
+    )

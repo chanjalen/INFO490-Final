@@ -1,0 +1,32 @@
+{% extends "search/base.html" %}
+
+{% block title %}SoClose | My Watchlist{% endblock %}
+
+{% block content %}
+<section class="stack stack--narrow">
+    <div class="section-intro">
+        <p class="eyebrow">Your collection</p>
+        <h1 class="section-title">Watchlist</h1>
+        <p class="section-copy">
+            {{ items|length }} film{{ items|length|pluralize }} saved for later.
+        </p>
+    </div>
+
+    {% if items %}
+        <div class="watchlist-grid">
+            {% for item in items %}
+                {% include "search/_movie_card.html" with movie=item.movie watchlist_ids=watchlist_ids %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <p class="empty-state__title">Your watchlist is empty.</p>
+            <p class="empty-state__copy">
+                Browse <a class="text-link" href="{% url 'home' %}">search</a> or
+                <a class="text-link" href="{% url 'recommended' %}">recommendations</a>
+                and hit <strong>+ Watchlist</strong> to save films here.
+            </p>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

@@ -46,11 +46,18 @@
                 {% endif %}
             </label>
 
-            <button class="button button--primary auth-submit" type="submit">
+            <button class="button button--primary auth-submit" type="submit" id="signup-btn">
                 <span class="button__text">Create account</span>
                 <span class="button__icon" aria-hidden="true">→</span>
             </button>
         </form>
+        <script>
+            document.querySelector('.auth-form').addEventListener('submit', function() {
+                const btn = document.getElementById('signup-btn');
+                btn.disabled = true;
+                btn.querySelector('.button__text').textContent = 'Creating…';
+            });
+        </script>
 
         <p class="auth-alt">
             Already have an account? <a href="{% url 'accounts:login' %}">Sign in</a>

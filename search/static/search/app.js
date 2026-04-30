@@ -428,6 +428,162 @@ document.addEventListener('DOMContentLoaded', () => {
     renderAll('forward');
 });
 
+/* Filter dropdowns */
+document.addEventListener('DOMContentLoaded', () => {
+    const filters = document.querySelectorAll('.filter');
+    if (!filters.length) return;
+    const dropdowns = [];
+
+    function closeAll(except = null) {
+        dropdowns.forEach(dropdown => {
+            if (dropdown.filter === except) return;
+            dropdown.trigger.setAttribute('aria-expanded', 'false');
+            dropdown.menu.hidden = true;
+        });
+    }
+
+    function positionMenu(dropdown) {
+        const { filter, menu } = dropdown;
+        const gap = 8;
+        const viewportGap = 12;
+        const rect = filter.getBoundingClientRect();
+        const maxMenuHeight = 248;
+        const spaceBelow = window.innerHeight - rect.bottom - gap - viewportGap;
+        const spaceAbove = rect.top - gap - viewportGap;
+        const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
+        const availableHeight = Math.max(132, openUp ? spaceAbove : spaceBelow);
+        const menuHeight = Math.min(menu.scrollHeight, maxMenuHeight, availableHeight);
+        const left = Math.min(
+            Math.max(viewportGap, rect.left),
+            window.innerWidth - rect.width - viewportGap
+        );
+
+        menu.style.width = `${rect.width}px`;
+        menu.style.maxHeight = `${Math.min(maxMenuHeight, availableHeight)}px`;
+        menu.style.left = `${left}px`;
+        menu.style.top = openUp
+            ? `${Math.max(viewportGap, rect.top - gap - menuHeight)}px`
+            : `${Math.min(window.innerHeight - viewportGap - menuHeight, rect.bottom + gap)}px`;
+    }
+
+    function openDropdown(dropdown) {
+        closeAll(dropdown.filter);
+        dropdown.menu.hidden = false;
+        dropdown.trigger.setAttribute('aria-expanded', 'true');
+        positionMenu(dropdown);
+    }
+
+    filters.forEach((filter, index) => {
+        const select = filter.querySelector('.filter__select');
+        if (!select) return;
+
+        filter.classList.add('is-enhanced');
+
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'filter__trigger';
+        trigger.setAttribute('aria-haspopup', 'listbox');
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.setAttribute('aria-controls', `filter-menu-${index}`);
+        trigger.innerHTML = '<span class="filter__value"></span>';
+
+        const menu = document.createElement('div');
+        menu.className = 'filter__menu';
+        menu.id = `filter-menu-${index}`;
+        menu.setAttribute('role', 'listbox');
+        menu.hidden = true;
+        document.body.appendChild(menu);
+
+        const dropdown = { filter, trigger, menu };
+        dropdowns.push(dropdown);
+
+        function syncValue() {
+            const selected = select.options[select.selectedIndex];
+            trigger.querySelector('.filter__value').textContent = selected ? selected.textContent : '';
+            menu.querySelectorAll('.filter__option').forEach(option => {
+                const isSelected = option.dataset.value === select.value;
+                option.classList.toggle('is-selected', isSelected);
+                option.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+            });
+        }
+
+        Array.from(select.options).forEach(option => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'filter__option';
+            item.dataset.value = option.value;
+            item.textContent = option.textContent;
+            item.setAttribute('role', 'option');
+            item.addEventListener('click', () => {
+                select.value = option.value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                syncValue();
+                closeAll();
+                trigger.focus();
+            });
+            menu.appendChild(item);
+        });
+
+        trigger.addEventListener('click', e => {
+            e.stopPropagation();
+            filter.click();
+        });
+
+        filter.addEventListener('click', e => {
+            if (e.target.closest('select')) return;
+            const willOpen = menu.hidden;
+            if (willOpen) {
+                openDropdown(dropdown);
+            } else {
+                closeAll();
+            }
+        });
+
+        trigger.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                closeAll();
+                trigger.focus();
+            }
+        });
+
+        select.insertAdjacentElement('afterend', trigger);
+        syncValue();
+    });
+
+    document.addEventListener('click', e => {
+        if (!e.target.closest('.filter') && !e.target.closest('.filter__menu')) closeAll();
+    });
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeAll();
+    });
+
+    window.addEventListener('resize', () => {
+        dropdowns.forEach(dropdown => {
+            if (!dropdown.menu.hidden) positionMenu(dropdown);
+        });
+    });
+
+    window.addEventListener('scroll', () => {
+        dropdowns.forEach(dropdown => {
+            if (!dropdown.menu.hidden) positionMenu(dropdown);
+        });
+    }, true);
+});
+
+// ── Collapsible filter bar ─────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    const toggle = document.getElementById('filter-toggle');
+    const grid   = document.getElementById('filter-grid');
+    if (!toggle || !grid) return;
+
+    toggle.addEventListener('click', () => {
+        const opening = grid.hidden;
+        grid.hidden = !opening;
+        toggle.setAttribute('aria-expanded', String(opening));
+    });
+});
+
 // ── Profile panel ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     const avatarBtn    = document.getElementById('avatar-btn');
@@ -544,5 +700,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     wireForm('form-delete', 'feedback-delete', () => {
         window.location.href = '/';
+    });
+});
+
+/* ── Watchlist toggle ─────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+    function getCsrfFromCookie() {
+        const match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : '';
+    }
+
+    document.body.addEventListener('click', async e => {
+        const btn = e.target.closest('.wl-btn[data-movie-id]');
+        if (!btn) return;
+        e.preventDefault();
+
+        const url = btn.dataset.url;
+        if (!url) return;
+
+        btn.disabled = true;
+        btn.classList.remove('wl-btn--pop');
+        void btn.offsetWidth; // reflow to restart animation
+        btn.classList.add('wl-btn--pop');
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfFromCookie(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const data = await res.json();
+            if (data.ok) {
+                const inList = data.in_list;
+                btn.classList.toggle('wl-btn--active', inList);
+                btn.setAttribute('aria-label', inList ? 'Remove from watchlist' : 'Add to watchlist');
+                btn.setAttribute('aria-pressed', inList ? 'true' : 'false');
+
+                const icon = btn.querySelector('.wl-btn__icon');
+                if (icon) icon.setAttribute('fill', inList ? 'currentColor' : 'none');
+
+                const label = btn.querySelector('.wl-btn__label');
+                if (label) {
+                    label.textContent = inList
+                        ? 'Added'
+                        : (btn.classList.contains('wl-btn--watchlist') ? 'Add to Watchlist' : 'Watchlist');
+                }
+            }
+        } catch { /* silent fail */ } finally {
+            btn.disabled = false;
+        }
     });
 });

@@ -41,7 +41,29 @@
                         <p>{{ item.reason }}</p>
                     </div>
                     <p class="recommendation-card__copy">{{ item.movie.synopsis|truncatewords:40 }}</p>
-                    <a class="button button--primary" href="{% url 'movie_detail' item.movie.id %}">Open movie</a>
+                    <div class="rec-card__actions">
+                        {% if request.user.is_authenticated %}
+                        <button
+                            class="wl-btn wl-btn--watchlist {% if item.movie.id in watchlist_ids %}wl-btn--active{% endif %}"
+                            data-movie-id="{{ item.movie.id }}"
+                            data-url="{% url 'accounts:toggle_watchlist' item.movie.id %}"
+                            aria-label="{% if item.movie.id in watchlist_ids %}Remove from watchlist{% else %}Add to watchlist{% endif %}"
+                            aria-pressed="{% if item.movie.id in watchlist_ids %}true{% else %}false{% endif %}"
+                        >
+                            <svg class="wl-btn__icon" width="15" height="15" viewBox="0 0 24 24" fill="{% if item.movie.id in watchlist_ids %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <span class="wl-btn__label">{% if item.movie.id in watchlist_ids %}Added{% else %}Add to Watchlist{% endif %}</span>
+                        </button>
+                        {% endif %}
+                        <a class="wl-btn wl-detail-link" href="{% url 'movie_detail' item.movie.id %}">
+                            <span class="wl-btn__label">See Detail</span>
+                            <svg class="wl-btn__icon wl-btn__icon--arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M5 12h14"/>
+                                <path d="M13 6l6 6-6 6"/>
+                            </svg>
+                        </a>
+                    </div>
                 </div>
             </article>
         {% endfor %}
