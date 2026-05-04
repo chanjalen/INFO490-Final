@@ -46,27 +46,24 @@ def get_search_categories() -> list[dict[str, str]]:
 
 
 def get_filter_options() -> dict[str, list]:
-    genres = [
-        genre
-        for genre in Movie.objects.exclude(genre="")
+    genres = list(
+        Movie.objects.exclude(genre="")
         .order_by("genre")
         .values_list("genre", flat=True)
         .distinct()
-    ]
-    languages = [
-        language
-        for language in Movie.objects.exclude(language="")
+    )
+    languages = list(
+        Movie.objects.exclude(language="")
         .order_by("language")
         .values_list("language", flat=True)
         .distinct()
-    ]
-    years = [
-        year
-        for year in Movie.objects.exclude(release_year__isnull=True)
+    )
+    years = list(
+        Movie.objects.exclude(release_year__isnull=True)
         .order_by("-release_year")
         .values_list("release_year", flat=True)
         .distinct()
-    ]
+    )
     return {"genres": genres, "languages": languages, "years": years}
 
 
@@ -214,17 +211,10 @@ def _tokenize_history(history: Iterable[dict]) -> list[str]:
     return tokens
 
 
-def get_recommendations(request, limit: int = 4) -> tuple[list[dict], bool]:
+def build_recommendations(request, movies: list) -> dict[int, str]:
     history = request.session.get(SEARCH_HISTORY_SESSION_KEY, [])
     if not history:
-        movies = list(Movie.objects.all().order_by("-release_year", "title")[:limit])
-        return [
-            {
-                "movie": movie,
-                "reason": "A strong place to start while your recommendation profile is still empty.",
-            }
-            for movie in movies
-        ], False
+        return {}
 
     genre_counts = Counter(
         entry["genre"].lower()
@@ -238,61 +228,38 @@ def get_recommendations(request, limit: int = 4) -> tuple[list[dict], bool]:
     )
     query_tokens = Counter(_tokenize_history(history))
 
-    scored_movies = []
-    for movie in Movie.objects.all():
-        score = 0
-        reasons = []
+    reasons: dict[int, str] = {}
 
+    for movie in movies:
         movie_genre = (movie.genre or "").lower()
         movie_language = (movie.language or "").lower()
-        search_blob = " ".join(
-            [
-                movie.title,
-                movie.synopsis,
-                movie.genre,
-                movie.cast,
-                movie.language,
-            ]
-        ).lower()
+        search_blob = " ".join([
+            movie.title,
+            movie.synopsis,
+            movie.genre,
+            movie.cast,
+            movie.language,
+        ]).lower()
 
-        for genre, count in genre_counts.items():
+        reason = ""
+
+        for genre, _ in genre_counts.most_common():
             if genre and genre in movie_genre:
-                score += 4 + count
-                reasons.append(f"matches your recent interest in {movie.genre}")
+                reason = f"matches your recent interest in {movie.genre}"
                 break
 
-        for language, count in language_counts.items():
-            if language and language in movie_language:
-                score += 2 + count
-                reasons.append(f"aligns with your recent {movie.language} searches")
-                break
+        if not reason:
+            for language, _ in language_counts.most_common():
+                if language and language in movie_language:
+                    reason = f"aligns with your recent {movie.language} searches"
+                    break
 
-        token_matches = [token for token in query_tokens if token in search_blob]
-        if token_matches:
-            score += len(token_matches)
-            reasons.append(f"echoes clues from searches like \"{', '.join(token_matches[:3])}\"")
+        if not reason:
+            token_matches = [t for t in query_tokens if t in search_blob]
+            if token_matches:
+                preview = ", ".join(token_matches[:3])
+                reason = f'echoes clues from searches like "{preview}"'
 
-        if score > 0:
-            scored_movies.append((score, movie.release_year or 0, movie, reasons))
+        reasons[movie.pk] = reason or "Recommended based on your recent search activity."
 
-    scored_movies.sort(key=lambda item: (-item[0], -item[1], item[2].title))
-    recommendations = []
-    for _, _, movie, reasons in scored_movies[:limit]:
-        recommendations.append(
-            {
-                "movie": movie,
-                "reason": reasons[0] if reasons else "Recommended from your recent search activity.",
-            }
-        )
-
-    if recommendations:
-        return recommendations, True
-
-    fallback = list(Movie.objects.all().order_by("-release_year", "title")[:limit])
-    return [
-        {
-            "movie": movie,
-            "reason": "Suggested from the current catalog while we build a stronger preference signal.",
-        }
-        for movie in fallback
-    ], True
+    return reasons
