@@ -30,8 +30,8 @@
 
         {% if movies %}
             <div class="movie-grid">
-                {% for movie in movies %}
-                    {% include "search/_movie_card.html" with movie=movie %}
+                {% for item in movies %}
+                    {% include "search/_movie_card.html" with movie=item.movie %}
                 {% endfor %}
             </div>
         {% else %}
