@@ -14,6 +14,7 @@ from .gemini import (
     get_catalog_recommendations,
     get_taste_profile_recommendations,
     rank_search_results,
+    _extract_json,
     _gemini_url,
 )
 from .ai import get_bi_encoder
@@ -319,6 +320,15 @@ class SearchViewsTests(TestCase):
     def test_gemini_uses_stable_configurable_model(self):
         self.assertEqual(settings.GEMINI_MODEL, "gemini-2.5-flash")
         self.assertIn("/models/gemini-2.5-flash:generateContent", _gemini_url())
+
+    @override_settings(GEMINI_MODEL="gemini-2.5-flash-preview-04-17")
+    def test_gemini_ignores_stale_render_model_env(self):
+        self.assertIn("/models/gemini-2.5-flash:generateContent", _gemini_url())
+        self.assertNotIn("preview", _gemini_url())
+
+    def test_gemini_json_parser_accepts_wrapped_json(self):
+        wrapped = 'Here are the picks:\n```json\n[{"index": 0, "reason": "match"}]\n```'
+        self.assertEqual(_extract_json(wrapped)[0]["index"], 0)
 
     @override_settings(LOCAL_DENSE_ENABLED=False)
     def test_local_dense_models_are_opt_in(self):

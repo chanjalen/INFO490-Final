@@ -21,10 +21,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY    = os.environ.get("SECRET_KEY", "dev-only-secret-key")
 TMDB_API_KEY  = os.environ.get("TMDB_API_KEY", "")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = "gemini-2.5-flash"
 DEBUG = os.environ.get("DEBUG", "True") == "True"
-APP_ENV = os.environ.get("APP_ENV", "local").strip().lower()
+RUNNING_ON_RENDER = any(
+    os.environ.get(name)
+    for name in (
+        "RENDER",
+        "RENDER_SERVICE_ID",
+        "RENDER_SERVICE_NAME",
+        "RENDER_EXTERNAL_HOSTNAME",
+        "RENDER_EXTERNAL_URL",
+        "RENDER_INSTANCE_ID",
+    )
+)
+APP_ENV = os.environ.get("APP_ENV", "").strip().lower()
+if not APP_ENV:
+    APP_ENV = "production" if RUNNING_ON_RENDER else "local"
 IS_PRODUCTION = APP_ENV == "production"
 USE_GEMINI = IS_PRODUCTION and bool(GEMINI_API_KEY)
 FLAN_T5_ENABLED = (

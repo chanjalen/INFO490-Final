@@ -19,10 +19,11 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 
 def _api_key() -> str:
-    return getattr(settings, "GEMINI_API_KEY", "") or ""
+    return (getattr(settings, "GEMINI_API_KEY", "") or "").strip()
 
 
 def _gemini_enabled() -> bool:
@@ -30,7 +31,7 @@ def _gemini_enabled() -> bool:
 
 
 def _model_name() -> str:
-    return getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+    return GEMINI_MODEL
 
 
 def _gemini_url() -> str:
@@ -38,8 +39,19 @@ def _gemini_url() -> str:
 
 
 def _extract_json(text: str):
-    raw = re.sub(r"```(?:json)?", "", text).strip().strip("`").strip()
-    return json.loads(raw)
+    raw = re.sub(r"```(?:json)?", "", text or "").strip().strip("`").strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        start = raw.find("[")
+        end = raw.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            return json.loads(raw[start:end + 1])
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return json.loads(raw[start:end + 1])
+        raise
 
 
 def _post_gemini(prompt: str, *, temperature: float, max_output_tokens: int) -> str:
@@ -51,6 +63,7 @@ def _post_gemini(prompt: str, *, temperature: float, max_output_tokens: int) -> 
             "generationConfig": {
                 "temperature": temperature,
                 "maxOutputTokens": max_output_tokens,
+                "responseMimeType": "application/json",
             },
         },
         timeout=30,
