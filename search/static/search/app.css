@@ -735,6 +735,8 @@ img {
     background: rgba(255, 255, 255, 0.75);
     box-shadow: var(--shadow-md);
     backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
 }
 
 .movie-card:hover,
@@ -747,7 +749,7 @@ img {
 .movie-card__link {
     display: grid;
     gap: 0;
-    height: 100%;
+    flex: 1;
 }
 
 .movie-card__poster,
