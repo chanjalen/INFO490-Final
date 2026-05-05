@@ -125,3 +125,82 @@ def get_watchlist_recommendations(
     except Exception as exc:
         logger.warning("Gemini recommendation failed: %s", exc)
         return []
+
+
+def narrow_search_results(
+    query: str,
+    candidate_movies: list,
+    count: int = 10,
+) -> list:
+    """
+    Ask Gemini to choose the best matches from an already-ranked search pool.
+
+    The normal local search still does the broad retrieval work. Gemini only
+    receives a compact candidate list and returns candidate indexes, so failures
+    can safely fall back to the original local ranking.
+    """
+    api_key = _api_key()
+    query = (query or "").strip()
+    if not api_key or not query or not candidate_movies:
+        return []
+
+    cand_lines = []
+    for i, movie in enumerate(candidate_movies):
+        cand_lines.append(
+            f"[{i}] {movie.title} ({movie.release_year or 'N/A'}): "
+            f"Genre: {movie.genre or 'Unknown'}. "
+            f"Language: {movie.language or 'Unknown'}. "
+            f"Cast: {(movie.cast or '')[:90]}. "
+            f"Synopsis: {(movie.synopsis or '')[:220]}"
+        )
+
+    prompt = (
+        "You are improving a movie search engine. The user searched:\n"
+        f'"{query}"\n\n'
+        "From the candidate movies below, pick the best matches for the user's "
+        "memory or intent. Prioritize plot, scene clues, characters, tone, genre, "
+        "cast, and visual details. Only choose from the numbered candidates.\n\n"
+        "CANDIDATES:\n"
+        + "\n".join(cand_lines)
+        + f"\n\nReturn ONLY a JSON array of up to {count} objects. "
+        'Each object: {"index": <number from brackets>} '
+        "No markdown and no extra text."
+    )
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 700},
+    }
+
+    try:
+        resp = requests.post(
+            GEMINI_URL,
+            params={"key": api_key},
+            json=payload,
+            timeout=20,
+        )
+        resp.raise_for_status()
+        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+        picks = json.loads(raw)
+
+        results = []
+        seen_pks = set()
+        for pick in picks:
+            idx = pick.get("index")
+            if not isinstance(idx, int) or not (0 <= idx < len(candidate_movies)):
+                continue
+            movie = candidate_movies[idx]
+            if movie.pk in seen_pks:
+                continue
+            seen_pks.add(movie.pk)
+            results.append(movie)
+            if len(results) >= count:
+                break
+
+        logger.info("Gemini narrowed search to %d results", len(results))
+        return results
+
+    except Exception as exc:
+        logger.warning("Gemini search narrowing failed: %s", exc)
+        return []

@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 from .models import Movie, SearchRecord, SearchHistory
 from accounts.models import WatchlistItem
 from .ai import explain_match_local, get_recommendations, search, tokenize, build_movie_text
+from .gemini import narrow_search_results
 from .services import (
     get_filter_options,
     get_search_categories,
@@ -105,7 +106,23 @@ def results(request):
             "watchlist_ids":     _watchlist_ids(request),
         })
 
-    raw_results = search(flat_query, movie_list, top_k=10)
+    raw_results = search(flat_query, movie_list, top_k=30)
+    gemini_movies = narrow_search_results(
+        flat_query,
+        [movie for movie, _ in raw_results],
+        count=10,
+    )
+    if gemini_movies:
+        local_scores = {movie.pk: score for movie, score in raw_results}
+        raw_results = [
+            (
+                movie,
+                local_scores.get(movie.pk, 0.0) or max(0.1, 1.0 - (rank * 0.05)),
+            )
+            for rank, movie in enumerate(gemini_movies)
+        ]
+    else:
+        raw_results = raw_results[:10]
     result_count = len(raw_results)
 
     record_search(
