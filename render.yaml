@@ -5,8 +5,9 @@ services:
   - type: web
     name: soclose
     runtime: python
-    buildCommand: "./build.sh"
-    startCommand: "gunicorn moviefinder.wsgi:application"
+    buildCommand: "bash build.sh"
+    preDeployCommand: "python manage.py refresh_posters"
+    startCommand: "gunicorn moviefinder.wsgi:application --log-file -"
     envVars:
       - key: SECRET_KEY
         generateValue: true        # Render generates a secure random value
