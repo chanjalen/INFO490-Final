@@ -764,6 +764,12 @@ img {
     object-fit: cover;
 }
 
+.movie-card__poster--fallback[hidden],
+.recommendation-card__poster-fallback[hidden],
+.detail-card__poster-fallback[hidden] {
+    display: none;
+}
+
 /* ── Match badge (overlaid on poster) ─────────────────────── */
 .match-badge {
     position: absolute;

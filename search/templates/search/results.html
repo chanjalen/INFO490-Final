@@ -24,7 +24,7 @@
 
     {% if has_search %}
         <div class="results-summary">
-            <p class="results-summary__count">{{ movies|length }} match{{ movies|length|pluralize }} found</p>
+            <p class="results-summary__count">{{ movies|length }} match{{ movies|length|pluralize:"es" }} found</p>
             <a class="text-link" href="{% url 'history' %}">View recent searches</a>
         </div>
 

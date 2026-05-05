@@ -22,6 +22,9 @@ venv/
 .venv/
 env/
 
+# Local model cache
+.model-cache/
+
 # IDE
 .idea/
 .vscode/

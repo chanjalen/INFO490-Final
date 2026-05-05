@@ -28,6 +28,10 @@ def _api_key() -> str:
     return getattr(settings, "GEMINI_API_KEY", "") or ""
 
 
+def _gemini_enabled() -> bool:
+    return bool(getattr(settings, "USE_GEMINI", False) and _api_key())
+
+
 def get_watchlist_recommendations(
     watchlist_movies: list,
     candidate_movies: list,
@@ -48,6 +52,8 @@ def get_watchlist_recommendations(
         error occurs — caller is responsible for the fallback.
     """
     api_key = _api_key()
+    if not _gemini_enabled():
+        return []
     if not api_key or not watchlist_movies or not candidate_movies:
         return []
 
@@ -127,80 +133,107 @@ def get_watchlist_recommendations(
         return []
 
 
-def narrow_search_results(
+def find_search_candidates(
     query: str,
-    candidate_movies: list,
-    count: int = 10,
+    catalog_movies: list,
+    count: int = 30,
+    chunk_size: int = 60,
+    max_catalog: int = 500,
 ) -> list:
     """
-    Ask Gemini to choose the best matches from an already-ranked search pool.
+    Ask Gemini to select a candidate pool before local BM25 ranking.
 
-    The normal local search still does the broad retrieval work. Gemini only
-    receives a compact candidate list and returns candidate indexes, so failures
-    can safely fall back to the original local ranking.
+    This keeps the Render request bounded: Gemini sees compact chunks of the
+    catalog and returns indexes; BM25 then ranks the selected candidates.
     """
     api_key = _api_key()
+    if not _gemini_enabled():
+        return []
     query = (query or "").strip()
-    if not api_key or not query or not candidate_movies:
+    if not api_key or not query or not catalog_movies:
         return []
 
-    cand_lines = []
-    for i, movie in enumerate(candidate_movies):
-        cand_lines.append(
-            f"[{i}] {movie.title} ({movie.release_year or 'N/A'}): "
-            f"Genre: {movie.genre or 'Unknown'}. "
-            f"Language: {movie.language or 'Unknown'}. "
-            f"Cast: {(movie.cast or '')[:90]}. "
-            f"Synopsis: {(movie.synopsis or '')[:220]}"
+    selected = []
+    seen_pks = set()
+    limited_catalog = catalog_movies[:max_catalog]
+    per_chunk = max(3, min(12, count // 3 or 10))
+
+    for start in range(0, len(limited_catalog), chunk_size):
+        chunk = limited_catalog[start:start + chunk_size]
+        cand_lines = []
+        for i, movie in enumerate(chunk):
+            cand_lines.append(
+                f"[{i}] {movie.title} ({movie.release_year or 'N/A'}): "
+                f"Genre: {movie.genre or 'Unknown'}. "
+                f"Language: {movie.language or 'Unknown'}. "
+                f"Cast: {(movie.cast or '')[:70]}. "
+                f"Synopsis: {(movie.synopsis or '')[:170]}"
+            )
+
+        prompt = (
+            "You are the first-pass candidate selector for a movie search engine. "
+            "The user searched:\n"
+            f'"{query}"\n\n'
+            f"Pick up to {per_chunk} candidate movies from this chunk that could match "
+            "the user's memory, vibe, plot clue, scene clue, cast clue, genre, or tone. "
+            "Only choose from the numbered candidates.\n\n"
+            "CANDIDATES:\n"
+            + "\n".join(cand_lines)
+            + "\n\nReturn ONLY a JSON array of objects like "
+            '{"index": <number from brackets>}. No markdown and no extra text.'
         )
 
-    prompt = (
-        "You are improving a movie search engine. The user searched:\n"
-        f'"{query}"\n\n'
-        "From the candidate movies below, pick the best matches for the user's "
-        "memory or intent. Prioritize plot, scene clues, characters, tone, genre, "
-        "cast, and visual details. Only choose from the numbered candidates.\n\n"
-        "CANDIDATES:\n"
-        + "\n".join(cand_lines)
-        + f"\n\nReturn ONLY a JSON array of up to {count} objects. "
-        'Each object: {"index": <number from brackets>} '
-        "No markdown and no extra text."
-    )
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.15, "maxOutputTokens": 500},
+        }
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 700},
-    }
+        try:
+            resp = requests.post(
+                GEMINI_URL,
+                params={"key": api_key},
+                json=payload,
+                timeout=20,
+            )
+            resp.raise_for_status()
+            raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+            picks = json.loads(raw)
+        except Exception as exc:
+            logger.warning("Gemini candidate selection failed: %s", exc)
+            return []
 
-    try:
-        resp = requests.post(
-            GEMINI_URL,
-            params={"key": api_key},
-            json=payload,
-            timeout=20,
-        )
-        resp.raise_for_status()
-        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
-        picks = json.loads(raw)
-
-        results = []
-        seen_pks = set()
         for pick in picks:
             idx = pick.get("index")
-            if not isinstance(idx, int) or not (0 <= idx < len(candidate_movies)):
+            if not isinstance(idx, int) or not (0 <= idx < len(chunk)):
                 continue
-            movie = candidate_movies[idx]
+            movie = chunk[idx]
             if movie.pk in seen_pks:
                 continue
             seen_pks.add(movie.pk)
-            results.append(movie)
-            if len(results) >= count:
-                break
+            selected.append(movie)
+            if len(selected) >= count:
+                logger.info("Gemini selected %d search candidates", len(selected))
+                return selected
 
-        logger.info("Gemini narrowed search to %d results", len(results))
-        return results
+    logger.info("Gemini selected %d search candidates", len(selected))
+    return selected
 
-    except Exception as exc:
-        logger.warning("Gemini search narrowing failed: %s", exc)
-        return []
+
+def search_with_gemini(
+    query: str,
+    catalog_movies: list,
+    count: int = 10,
+) -> list[tuple]:
+    """
+    Production search path: Gemini chooses and ranks the final results.
+
+    Returns a list of (Movie, score) tuples. The score is rank-based so the
+    existing result card UI can keep showing match percentages without invoking
+    local ranking models.
+    """
+    movies = find_search_candidates(query, catalog_movies, count=count)
+    return [
+        (movie, max(0.1, 1.0 - (rank * 0.07)))
+        for rank, movie in enumerate(movies)
+    ]

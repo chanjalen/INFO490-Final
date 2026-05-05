@@ -5,6 +5,7 @@ from collections import Counter
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.http import require_POST
@@ -12,7 +13,7 @@ from django.views.decorators.http import require_POST
 from .models import Movie, SearchRecord, SearchHistory
 from accounts.models import WatchlistItem
 from .ai import explain_match_local, get_recommendations, search, tokenize, build_movie_text
-from .gemini import narrow_search_results
+from .gemini import get_watchlist_recommendations, search_with_gemini
 from .services import (
     get_filter_options,
     get_search_categories,
@@ -106,23 +107,18 @@ def results(request):
             "watchlist_ids":     _watchlist_ids(request),
         })
 
-    raw_results = search(flat_query, movie_list, top_k=30)
-    gemini_movies = narrow_search_results(
-        flat_query,
-        [movie for movie, _ in raw_results],
-        count=10,
+    search_query = flat_query or " ".join(
+        part for part in [genre, language, year] if part
     )
-    if gemini_movies:
-        local_scores = {movie.pk: score for movie, score in raw_results}
-        raw_results = [
-            (
-                movie,
-                local_scores.get(movie.pk, 0.0) or max(0.1, 1.0 - (rank * 0.05)),
+    if settings.IS_PRODUCTION:
+        raw_results = search_with_gemini(search_query, movie_list, count=10)
+        if not raw_results and not settings.USE_GEMINI:
+            messages.warning(
+                request,
+                "Gemini search is not configured for production yet.",
             )
-            for rank, movie in enumerate(gemini_movies)
-        ]
     else:
-        raw_results = raw_results[:10]
+        raw_results = search(search_query, movie_list, top_k=10)
     result_count = len(raw_results)
 
     record_search(
@@ -290,9 +286,6 @@ def recommended(request):
 
     Tier 3:        Editorial defaults — most recent movies in the catalogue.
     """
-    from django.conf import settings as django_settings
-    from .gemini import get_watchlist_recommendations
-
     all_movies = list(Movie.objects.all().order_by("-release_year"))
 
     watchlisted_ids = set()
@@ -306,31 +299,11 @@ def recommended(request):
         watchlist_movies = [item.movie for item in wl_qs[:15]]
         watchlisted_ids  = {m.pk for m in watchlist_movies}
 
-    # ── Tier 0: Gemini watchlist recommendations ──────────────────────────────
-    gemini_key = getattr(django_settings, "GEMINI_API_KEY", "")
-    if watchlist_movies and gemini_key:
-        # Pre-filter candidates by genre overlap with watchlist so the prompt
-        # stays compact and results stay relevant.
-        watchlist_genres = set()
-        for m in watchlist_movies:
-            for g in (m.genre or "").split(","):
-                g = g.strip().lower()
-                if g:
-                    watchlist_genres.add(g)
-
-        scored_candidates = []
-        for m in all_movies:
-            if m.pk in watchlisted_ids:
-                continue
-            movie_genres = {g.strip().lower() for g in (m.genre or "").split(",") if g.strip()}
-            overlap = len(watchlist_genres & movie_genres)
-            scored_candidates.append((overlap, m))
-
-        scored_candidates.sort(key=lambda x: -x[0])
-        candidates = [m for _, m in scored_candidates[:50]]
-
-        gemini_recs = get_watchlist_recommendations(watchlist_movies, candidates, count=10)
-        if gemini_recs:
+    if settings.IS_PRODUCTION:
+        rec_data = []
+        if watchlist_movies and settings.USE_GEMINI:
+            candidates = [m for m in all_movies if m.pk not in watchlisted_ids][:50]
+            gemini_recs = get_watchlist_recommendations(watchlist_movies, candidates, count=10)
             rec_data = [
                 {
                     "movie":        movie,
@@ -340,13 +313,19 @@ def recommended(request):
                 }
                 for movie, reason in gemini_recs
             ]
-            return render(request, "search/recommended.html", {
-                "recommendations":  rec_data,
-                "is_editorial":     False,
-                "source":           "gemini",
-                "watchlist_count":  len(watchlist_movies),
-                "watchlist_ids":    watchlisted_ids,
-            })
+        elif not settings.USE_GEMINI:
+            messages.warning(
+                request,
+                "Gemini recommendations are not configured for production yet.",
+            )
+
+        return render(request, "search/recommended.html", {
+            "recommendations":  rec_data,
+            "is_editorial":     False,
+            "source":           "gemini",
+            "watchlist_count":  len(watchlist_movies),
+            "watchlist_ids":    watchlisted_ids,
+        })
 
     # ── Tier 1: AI embedding recommendations ─────────────────────────────────
     embedded_movies = [m for m in all_movies if m.embedding]

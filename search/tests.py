@@ -1,8 +1,12 @@
 from django.test import TestCase
+from django.test import override_settings
 from django.urls import reverse
 from django.contrib.auth.models import User
+from unittest.mock import patch
 
+from accounts.models import WatchlistItem
 from .models import Movie, SearchRecord
+from .gemini import find_search_candidates
 
 
 class SearchViewsTests(TestCase):
@@ -71,6 +75,97 @@ class SearchViewsTests(TestCase):
         response = self.client.get(reverse("recommended"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Recommendations")
+
+    @override_settings(
+        IS_PRODUCTION=False,
+        USE_GEMINI=False,
+        GEMINI_API_KEY="local-key-should-not-be-used",
+    )
+    def test_local_search_never_calls_gemini_api_even_with_key(self):
+        with patch("search.gemini.requests.post") as mocked_post:
+            response = self.client.get(reverse("results"), {"q": "spirit world"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Spirited Away")
+        mocked_post.assert_not_called()
+
+    @override_settings(
+        IS_PRODUCTION=True,
+        USE_GEMINI=False,
+        GEMINI_API_KEY="",
+    )
+    def test_production_search_without_gemini_does_not_fall_back_to_local_search(self):
+        with patch("search.views.search") as mocked_local_search:
+            response = self.client.get(reverse("results"), {"q": "spirit world"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "0 matches found")
+        mocked_local_search.assert_not_called()
+
+    @override_settings(
+        IS_PRODUCTION=True,
+        USE_GEMINI=True,
+        GEMINI_API_KEY="production-key",
+    )
+    def test_production_search_uses_gemini_results_only(self):
+        movie = Movie.objects.get(title="The Grand Budapest Hotel")
+        with (
+            patch("search.views.search_with_gemini", return_value=[(movie, 1.0)]) as mocked_gemini,
+            patch("search.views.search") as mocked_local_search,
+        ):
+            response = self.client.get(reverse("results"), {"q": "concierge"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The Grand Budapest Hotel")
+        mocked_gemini.assert_called_once()
+        mocked_local_search.assert_not_called()
+
+    @override_settings(
+        IS_PRODUCTION=False,
+        USE_GEMINI=False,
+        GEMINI_API_KEY="local-key-should-not-be-used",
+    )
+    def test_local_recommendations_never_call_gemini_api_even_with_key(self):
+        user = User.objects.create_user(username="local-rec-user", password="pass12345")
+        movie = Movie.objects.get(title="Spirited Away")
+        WatchlistItem.objects.create(user=user, movie=movie)
+        self.client.force_login(user)
+
+        with patch("search.gemini.requests.post") as mocked_post:
+            response = self.client.get(reverse("recommended"))
+
+        self.assertEqual(response.status_code, 200)
+        mocked_post.assert_not_called()
+
+    @override_settings(
+        IS_PRODUCTION=True,
+        USE_GEMINI=False,
+        GEMINI_API_KEY="",
+    )
+    def test_production_recommendations_without_gemini_do_not_use_local_tiers(self):
+        user = User.objects.create_user(username="prod-rec-user", password="pass12345")
+        movie = Movie.objects.get(title="Spirited Away")
+        WatchlistItem.objects.create(user=user, movie=movie)
+        self.client.force_login(user)
+
+        with patch("search.views.get_recommendations") as mocked_local_recs:
+            response = self.client.get(reverse("recommended"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nothing to show yet.")
+        mocked_local_recs.assert_not_called()
+
+    @override_settings(
+        IS_PRODUCTION=False,
+        USE_GEMINI=False,
+        GEMINI_API_KEY="local-key-should-not-be-used",
+    )
+    def test_gemini_helper_is_inert_when_not_enabled(self):
+        with patch("search.gemini.requests.post") as mocked_post:
+            candidates = find_search_candidates("spirit world", list(Movie.objects.all()))
+
+        self.assertEqual(candidates, [])
+        mocked_post.assert_not_called()
 
     def test_movie_detail_page_loads(self):
         movie = Movie.objects.filter(title="Spirited Away").first()

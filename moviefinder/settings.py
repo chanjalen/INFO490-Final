@@ -23,6 +23,23 @@ SECRET_KEY    = os.environ.get("SECRET_KEY", "dev-only-secret-key")
 TMDB_API_KEY  = os.environ.get("TMDB_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
+APP_ENV = os.environ.get("APP_ENV", "local").strip().lower()
+IS_PRODUCTION = APP_ENV == "production"
+USE_GEMINI = IS_PRODUCTION and bool(GEMINI_API_KEY)
+FLAN_T5_ENABLED = (
+    os.environ.get("FLAN_T5_ENABLED")
+    or os.environ.get("ENABLE_FLAN_T5")
+    or "False"
+) == "True"
+LOCAL_MODEL_CACHE_DIR = Path(
+    os.environ.get("LOCAL_MODEL_CACHE_DIR", BASE_DIR / ".model-cache")
+)
+if not IS_PRODUCTION:
+    os.environ.setdefault("HF_HOME", str(LOCAL_MODEL_CACHE_DIR / "huggingface"))
+    os.environ.setdefault(
+        "SENTENCE_TRANSFORMERS_HOME",
+        str(LOCAL_MODEL_CACHE_DIR / "sentence-transformers"),
+    )
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")

@@ -2,20 +2,18 @@ import json
 import logging
 import math
 import string
+import importlib.util
+import sys
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # Heavy ML libraries — not installed on Render free tier.
 # When absent the search pipeline falls back to BM25-only.
-try:
-    import numpy as np
-    from sentence_transformers import CrossEncoder, SentenceTransformer
-    from sklearn.metrics.pairwise import cosine_similarity
-    DENSE_AVAILABLE = True
-except ImportError:
-    DENSE_AVAILABLE = False
-    np = None
+DENSE_AVAILABLE = all(
+    importlib.util.find_spec(name) is not None
+    for name in ("numpy", "sentence_transformers", "sklearn")
+) and "test" not in sys.argv
 
 # Model names (only used when DENSE_AVAILABLE)
 BI_ENCODER_MODEL    = "all-MiniLM-L6-v2"
@@ -34,6 +32,7 @@ def get_bi_encoder():
         return None
     global _bi_encoder
     if _bi_encoder is None:
+        from sentence_transformers import SentenceTransformer
         logger.info("Loading bi-encoder: %s", BI_ENCODER_MODEL)
         _bi_encoder = SentenceTransformer(BI_ENCODER_MODEL)
     return _bi_encoder
@@ -44,6 +43,7 @@ def get_cross_encoder():
         return None
     global _cross_encoder
     if _cross_encoder is None:
+        from sentence_transformers import CrossEncoder
         logger.info("Loading cross-encoder: %s", CROSS_ENCODER_MODEL)
         _cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL, max_length=512)
     return _cross_encoder
@@ -121,9 +121,21 @@ def bm25_search(query: str, movies: list, top_k: int = 50) -> list[tuple]:
         return []
     index  = _get_bm25_index(movies)
     tokens = tokenize(query)
+    semantic_tokens = [token for token in tokens if not token.isdigit()]
     scores = index.get_scores(tokens)
     ranked = sorted(zip(movies, scores), key=lambda x: x[1], reverse=True)
-    return [(m, float(s)) for m, s in ranked[:top_k] if s > 0.0]
+    results = []
+    for movie, score in ranked:
+        if score <= 0.0:
+            continue
+        if semantic_tokens:
+            movie_tokens = set(tokenize(build_movie_text(movie)))
+            if not (set(semantic_tokens) & movie_tokens):
+                continue
+        results.append((movie, float(score)))
+        if len(results) >= top_k:
+            break
+    return results
 
 
 # =============================================================================
@@ -133,6 +145,9 @@ def bm25_search(query: str, movies: list, top_k: int = 50) -> list[tuple]:
 def semantic_search(query: str, movies: list, top_k: int = 50) -> list[tuple]:
     if not DENSE_AVAILABLE or not movies or not query.strip():
         return []
+    import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
+
     model     = get_bi_encoder()
     query_vec = model.encode(query, show_progress_bar=False)
     results   = []
@@ -295,6 +310,8 @@ def get_recommendations(
     """
     if not DENSE_AVAILABLE or not search_history or not all_movies:
         return []
+    import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
 
     exclude_ids = exclude_ids or set()
     model   = get_bi_encoder()
