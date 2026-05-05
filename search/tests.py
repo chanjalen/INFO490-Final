@@ -412,6 +412,12 @@ class SearchViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, movie.title)
 
+    def test_curated_sample_movies_have_poster_urls(self):
+        movie = Movie.objects.get(title="Inception")
+        self.assertTrue(movie.poster_url.startswith("https://image.tmdb.org/t/p/w500/"))
+        response = self.client.get(reverse("movie_detail", args=[movie.pk]))
+        self.assertContains(response, f'src="{movie.poster_url}"')
+
     def test_movie_detail_with_blank_genre_shows_no_related_titles(self):
         primary = Movie.objects.create(
             title="No Genre Primary",
