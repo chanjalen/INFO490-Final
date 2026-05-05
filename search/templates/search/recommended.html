@@ -21,13 +21,16 @@
             <article class="recommendation-card">
                 <div class="recommendation-card__media">
                     {% if item.movie.poster_url %}
-                        <img src="{{ item.movie.poster_url }}" alt="{{ item.movie.title }} poster">
-                    {% else %}
-                        <div class="recommendation-card__poster-fallback" aria-hidden="true">
-                            <span>{{ item.movie.title|slice:":1" }}</span>
-                            <small>{{ item.movie.release_year|default:"Film" }}</small>
-                        </div>
+                        <img
+                            src="{{ item.movie.poster_url }}"
+                            alt="{{ item.movie.title }} poster"
+                            onerror="this.style.display='none';this.nextElementSibling.removeAttribute('hidden');"
+                        >
                     {% endif %}
+                    <div class="recommendation-card__poster-fallback" {% if item.movie.poster_url %}hidden{% endif %} aria-hidden="true">
+                        <span>{{ item.movie.title|slice:":1" }}</span>
+                        <small>{{ item.movie.release_year|default:"Film" }}</small>
+                    </div>
                 </div>
                 <div class="recommendation-card__body">
                     <p class="recommendation-card__eyebrow">{{ item.movie.genre|default:"Uncategorized" }}</p>

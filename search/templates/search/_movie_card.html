@@ -2,13 +2,17 @@
     <a class="movie-card__link" href="{% url 'movie_detail' movie.id %}">
         <div class="movie-card__poster-wrap">
             {% if movie.poster_url %}
-                <img class="movie-card__poster" src="{{ movie.poster_url }}" alt="{{ movie.title }} poster">
-            {% else %}
-                <div class="movie-card__poster movie-card__poster--fallback" aria-hidden="true">
-                    <span>{{ movie.title|slice:":1" }}</span>
-                    <small>{{ movie.release_year|default:"Film" }}</small>
-                </div>
+                <img
+                    class="movie-card__poster"
+                    src="{{ movie.poster_url }}"
+                    alt="{{ movie.title }} poster"
+                    onerror="this.style.display='none';this.nextElementSibling.removeAttribute('hidden');"
+                >
             {% endif %}
+            <div class="movie-card__poster movie-card__poster--fallback" {% if movie.poster_url %}hidden{% endif %} aria-hidden="true">
+                <span>{{ movie.title|slice:":1" }}</span>
+                <small>{{ movie.release_year|default:"Film" }}</small>
+            </div>
             {% if score_pct %}
                 <div class="match-badge {% if score_pct >= 65 %}match-badge--strong{% elif score_pct >= 50 %}match-badge--good{% else %}match-badge--weak{% endif %}">
                     #{{ rank }} &middot; {{ score_pct }}%
