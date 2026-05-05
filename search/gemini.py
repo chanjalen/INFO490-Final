@@ -16,6 +16,8 @@ import re
 import requests
 from django.conf import settings
 
+from .ai import bm25_search, build_movie_text, tokenize
+
 logger = logging.getLogger(__name__)
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
@@ -142,6 +144,53 @@ def _movie_catalog_lines(movies: list, synopsis_chars: int = 260) -> list[str]:
             f"Synopsis: {(movie.synopsis or '')[:synopsis_chars]}"
         )
     return lines
+
+
+def _strip_focus_labels(query: str) -> str:
+    query = (query or "").strip()
+    query = re.sub(
+        r"\b(?:general|character|scene|plot|dialogue|visual|time of day|weather|action|name)\s*:\s*",
+        " ",
+        query,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"\s+", " ", query).strip()
+
+
+def _production_lexical_fallback(query: str, movies: list, count: int) -> list[tuple]:
+    """
+    Last-mile guardrail for production search.
+
+    Gemini is still the first semantic ranker. If it returns no usable indexes,
+    use the same lightweight lexical retrieval behavior local mode has, so vague
+    searches do not collapse to an empty page.
+    """
+    clean_query = _strip_focus_labels(query)
+    if not clean_query:
+        return []
+
+    fallback_query = " ".join([clean_query, query]).strip()
+    results = bm25_search(fallback_query, movies, top_k=count)
+    if not results:
+        results = bm25_search(clean_query, movies, top_k=count)
+    if not results:
+        query_tokens = set(tokenize(clean_query))
+        overlap_results = []
+        for movie in movies:
+            movie_tokens = set(tokenize(build_movie_text(movie)))
+            overlap = query_tokens & movie_tokens
+            if not overlap:
+                continue
+            score = len(overlap) / max(1, len(query_tokens))
+            overlap_results.append((movie, score))
+        results = sorted(overlap_results, key=lambda item: item[1], reverse=True)[:count]
+        if not results:
+            return []
+
+    max_score = max(score for _, score in results) or 1.0
+    normalised = [(movie, max(0.1, min(0.82, score / max_score * 0.82))) for movie, score in results]
+    logger.info("Production lexical fallback returned %d results", len(normalised))
+    return normalised
 
 
 def get_watchlist_recommendations(
@@ -496,6 +545,9 @@ def rank_search_results(
         results.append((movie, min(1.0, max(0.1, confidence))))
         if len(results) >= count:
             break
+
+    if not results:
+        results = _production_lexical_fallback(query, candidates, count)
 
     logger.info("Gemini semantic search returned %d results", len(results))
     return results

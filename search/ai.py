@@ -140,7 +140,20 @@ _STOPWORDS = {
 
 def tokenize(text: str) -> list[str]:
     text = text.lower().translate(str.maketrans("", "", string.punctuation))
-    return [t for t in text.split() if t and t not in _STOPWORDS]
+    normalizations = {
+        "women": "woman",
+        "woman": "woman",
+        "men": "man",
+        "dree": "dress",
+        "drees": "dress",
+        "dressed": "dress",
+        "dresses": "dress",
+    }
+    return [
+        normalizations.get(t, t)
+        for t in text.split()
+        if t and t not in _STOPWORDS
+    ]
 
 
 def build_movie_text(movie) -> str:

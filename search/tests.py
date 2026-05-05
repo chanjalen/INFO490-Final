@@ -18,7 +18,7 @@ from .gemini import (
     _extract_ranked_picks,
     _gemini_url,
 )
-from .ai import get_bi_encoder
+from .ai import get_bi_encoder, tokenize
 
 
 class SearchViewsTests(TestCase):
@@ -185,6 +185,31 @@ class SearchViewsTests(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0][0].title, "Spirited Away")
         self.assertAlmostEqual(results[0][1], 0.91)
+
+    @override_settings(
+        IS_PRODUCTION=True,
+        USE_GEMINI=True,
+        GEMINI_API_KEY="production-key",
+    )
+    def test_production_semantic_search_uses_local_like_guardrail_when_gemini_returns_empty(self):
+        target = Movie.objects.create(
+            title="Red Dress Mystery",
+            synopsis="A woman in a red dress appears at night and changes the course of a chase.",
+            genre="Mystery",
+            cast="A. Performer",
+            release_year=2026,
+            language="English",
+        )
+        other = Movie.objects.get(title="Spirited Away")
+
+        with patch("search.gemini._post_gemini", return_value="[]"):
+            results = rank_search_results(
+                "General: women in red dree",
+                [other, target],
+            )
+
+        self.assertTrue(results)
+        self.assertEqual(results[0][0], target)
 
     @override_settings(
         IS_PRODUCTION=True,
@@ -372,6 +397,10 @@ class SearchViewsTests(TestCase):
     def test_gemini_ranked_pick_parser_recovers_indexes_from_bad_json(self):
         broken = '[{"index": 4, "confidence": 0.82, "reason": "cut off'
         self.assertEqual(_extract_ranked_picks(broken)[0]["index"], 4)
+
+    def test_tokenizer_normalizes_common_visual_query_terms(self):
+        self.assertIn("woman", tokenize("women in red dree"))
+        self.assertIn("dress", tokenize("women in red dree"))
 
     @override_settings(LOCAL_DENSE_ENABLED=False)
     def test_local_dense_models_are_opt_in(self):
