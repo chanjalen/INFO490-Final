@@ -1,0 +1,5 @@
+-r requirements.txt
+sentence-transformers>=3.0.0
+transformers>=4.40.0
+scikit-learn>=1.4.0
+numpy>=1.26.0

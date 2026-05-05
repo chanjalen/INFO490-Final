@@ -141,7 +141,7 @@ def results(request):
         {
             "movie": movie,
             "score": score,
-            "score_pct": min(100, max(0, int((score + 10) * 5))),
+            "score_pct": min(100, max(0, int(score * 100))),
             "in_watchlist": movie.pk in watchlisted_ids,
             "matched_keywords": sorted(q_tokens & set(tokenize(build_movie_text(movie))))[:6],
             "rank": rank,
