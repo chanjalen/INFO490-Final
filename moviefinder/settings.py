@@ -22,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY    = os.environ.get("SECRET_KEY", "dev-only-secret-key")
 TMDB_API_KEY  = os.environ.get("TMDB_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 APP_ENV = os.environ.get("APP_ENV", "local").strip().lower()
 IS_PRODUCTION = APP_ENV == "production"

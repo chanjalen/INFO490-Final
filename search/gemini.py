@@ -18,10 +18,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta"
-    "/models/gemini-2.5-flash-preview-04-17:generateContent"
-)
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
 def _api_key() -> str:
@@ -32,6 +29,14 @@ def _gemini_enabled() -> bool:
     return bool(getattr(settings, "USE_GEMINI", False) and _api_key())
 
 
+def _model_name() -> str:
+    return getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+
+
+def _gemini_url() -> str:
+    return f"{GEMINI_BASE_URL}/models/{_model_name()}:generateContent"
+
+
 def _extract_json(text: str):
     raw = re.sub(r"```(?:json)?", "", text).strip().strip("`").strip()
     return json.loads(raw)
@@ -39,7 +44,7 @@ def _extract_json(text: str):
 
 def _post_gemini(prompt: str, *, temperature: float, max_output_tokens: int) -> str:
     resp = requests.post(
-        GEMINI_URL,
+        _gemini_url(),
         params={"key": _api_key()},
         json={
             "contents": [{"parts": [{"text": prompt}]}],
@@ -50,7 +55,16 @@ def _post_gemini(prompt: str, *, temperature: float, max_output_tokens: int) -> 
         },
         timeout=30,
     )
-    resp.raise_for_status()
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError as exc:
+        logger.warning(
+            "Gemini request failed for model %s with status %s: %s",
+            _model_name(),
+            resp.status_code,
+            resp.text[:500],
+        )
+        raise exc
     return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
@@ -87,10 +101,9 @@ def get_watchlist_recommendations(
         Empty list when the API key is missing, watchlist is empty, or any
         error occurs — caller is responsible for the fallback.
     """
-    api_key = _api_key()
     if not _gemini_enabled():
         return []
-    if not api_key or not watchlist_movies or not candidate_movies:
+    if not watchlist_movies or not candidate_movies:
         return []
     target_count = min(count, len(candidate_movies))
 
@@ -128,20 +141,12 @@ def get_watchlist_recommendations(
         "No markdown, no extra text — just the raw JSON array."
     )
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1500},
-    }
-
     try:
-        resp = requests.post(
-            GEMINI_URL,
-            params={"key": api_key},
-            json=payload,
-            timeout=25,
+        raw = _post_gemini(
+            prompt,
+            temperature=0.4,
+            max_output_tokens=2600,
         )
-        resp.raise_for_status()
-        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         picks = _extract_json(raw)
 
         results = []
@@ -164,6 +169,66 @@ def get_watchlist_recommendations(
 
     except Exception as exc:
         logger.warning("Gemini recommendation failed: %s", exc)
+        return []
+
+
+def get_taste_profile_recommendations(
+    profile_lines: list[str],
+    candidate_movies: list,
+    count: int = 24,
+) -> list[tuple]:
+    """
+    Ask Gemini to recommend movies from searches and/or saved movies.
+
+    Candidate evidence includes genre, cast, director, language, and synopsis.
+    """
+    profile_lines = [line.strip() for line in profile_lines if line and line.strip()]
+    if not _gemini_enabled() or not profile_lines or not candidate_movies:
+        return []
+
+    target_count = min(count, len(candidate_movies))
+    prompt = (
+        "You are a movie recommendation engine. Infer the user's taste from "
+        "their recent searches and saved movies. Recommend movies by comparing "
+        "genre, cast, synopsis, tone, plot themes, director, and language. Do "
+        "not require exact keyword overlap. Only choose from numbered candidate "
+        "entries.\n\n"
+        "USER TASTE PROFILE:\n"
+        + "\n".join(f"- {line[:360]}" for line in profile_lines[:24])
+        + "\n\nCANDIDATES:\n"
+        + "\n".join(_movie_catalog_lines(candidate_movies, synopsis_chars=280))
+        + f"\n\nReturn ONLY a JSON array of up to {target_count} objects. "
+        'Each object must be: {"index": <number>, '
+        '"reason": "<1-2 sentence explanation referencing genre, cast, synopsis, tone, or theme>"}. '
+        "No markdown, no prose outside JSON."
+    )
+
+    try:
+        picks = _extract_json(
+            _post_gemini(prompt, temperature=0.35, max_output_tokens=3000)
+        )
+        results = []
+        seen_pks = set()
+        for pick in picks:
+            idx = pick.get("index")
+            reason = pick.get(
+                "reason",
+                "Recommended from your recent searches and saved movies.",
+            )
+            if not isinstance(idx, int) or not (0 <= idx < len(candidate_movies)):
+                continue
+            movie = candidate_movies[idx]
+            if movie.pk in seen_pks:
+                continue
+            seen_pks.add(movie.pk)
+            results.append((movie, reason))
+            if len(results) >= target_count:
+                break
+
+        logger.info("Gemini returned %d taste-profile recommendations", len(results))
+        return results
+    except Exception as exc:
+        logger.warning("Gemini taste-profile recommendation failed: %s", exc)
         return []
 
 
@@ -278,7 +343,7 @@ def find_search_candidates(
 
         try:
             resp = requests.post(
-                GEMINI_URL,
+                _gemini_url(),
                 params={"key": api_key},
                 json=payload,
                 timeout=20,

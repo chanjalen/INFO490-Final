@@ -15,6 +15,7 @@ from accounts.models import WatchlistItem
 from .ai import explain_match_local, get_recommendations, search, tokenize, build_movie_text
 from .gemini import (
     get_catalog_recommendations,
+    get_taste_profile_recommendations,
     get_watchlist_recommendations,
     search_with_gemini,
 )
@@ -116,6 +117,14 @@ def results(request):
     )
     if settings.IS_PRODUCTION:
         raw_results = search_with_gemini(search_query, movie_list, count=10)
+        if not raw_results:
+            logger.info(
+                "Production Gemini search returned no results: use_gemini=%s model=%s query=%r catalog_size=%d",
+                settings.USE_GEMINI,
+                getattr(settings, "GEMINI_MODEL", ""),
+                search_query,
+                len(movie_list),
+            )
         if not raw_results and not settings.USE_GEMINI:
             messages.warning(
                 request,
@@ -274,6 +283,49 @@ def clear_history(request):
     return redirect("history")
 
 
+def _production_recommendation_profile(request, watchlist_movies: list) -> list[str]:
+    """Build compact taste signals for Gemini from saved movies and searches."""
+    profile_lines = []
+    for movie in watchlist_movies:
+        profile_lines.append(
+            f"Saved movie: {movie.title} ({movie.release_year or 'N/A'}). "
+            f"Genre: {movie.genre or 'Unknown'}. "
+            f"Cast: {(movie.cast or '')[:140]}. "
+            f"Synopsis: {(movie.synopsis or '')[:260]}"
+        )
+
+    if request.user.is_authenticated:
+        histories = SearchHistory.objects.filter(user=request.user)[:10]
+        for item in histories:
+            if item.query_text.strip():
+                profile_lines.append(f"Recent search: {item.query_text.strip()[:320]}")
+
+    for entry in request.session.get(SEARCH_HISTORY_SESSION_KEY, [])[:10]:
+        parts = []
+        if entry.get("focus"):
+            parts.append(f"Focus: {entry['focus']}")
+        if entry.get("query"):
+            parts.append(f"Query: {entry['query']}")
+        if entry.get("genre"):
+            parts.append(f"Genre: {entry['genre']}")
+        if entry.get("language"):
+            parts.append(f"Language: {entry['language']}")
+        if entry.get("year"):
+            parts.append(f"Year: {entry['year']}")
+        if parts:
+            profile_lines.append("Recent session search: " + "; ".join(parts))
+
+    deduped = []
+    seen = set()
+    for line in profile_lines:
+        key = line.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(line)
+    return deduped[:24]
+
+
 def recommended(request):
     """
     Four-tier recommendation system (highest priority first):
@@ -306,15 +358,26 @@ def recommended(request):
     if settings.IS_PRODUCTION:
         rec_data = []
         if settings.USE_GEMINI:
-            if watchlist_movies:
-                candidates = [m for m in all_movies if m.pk not in watchlisted_ids][:150]
-                gemini_recs = get_watchlist_recommendations(
-                    watchlist_movies,
+            candidates = [m for m in all_movies if m.pk not in watchlisted_ids][:200]
+            profile_lines = _production_recommendation_profile(request, watchlist_movies)
+            if profile_lines:
+                gemini_recs = get_taste_profile_recommendations(
+                    profile_lines,
                     candidates,
                     count=24,
                 )
             else:
+                gemini_recs = []
+
+            if not gemini_recs and watchlist_movies:
+                gemini_recs = get_watchlist_recommendations(
+                    watchlist_movies,
+                    candidates[:150],
+                    count=24,
+                )
+            if not gemini_recs:
                 gemini_recs = get_catalog_recommendations(all_movies[:200], count=24)
+
             rec_data = [
                 {
                     "movie":        movie,

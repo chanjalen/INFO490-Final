@@ -8,8 +8,14 @@ from django.conf import settings
 from unittest.mock import patch
 
 from accounts.models import WatchlistItem
-from .models import Movie, SearchRecord
-from .gemini import find_search_candidates, get_catalog_recommendations, rank_search_results
+from .models import Movie, SearchHistory, SearchRecord
+from .gemini import (
+    find_search_candidates,
+    get_catalog_recommendations,
+    get_taste_profile_recommendations,
+    rank_search_results,
+    _gemini_url,
+)
 from .ai import get_bi_encoder
 
 
@@ -159,10 +165,31 @@ class SearchViewsTests(TestCase):
         USE_GEMINI=True,
         GEMINI_API_KEY="production-key",
     )
+    def test_gemini_taste_profile_recommendations_compare_genre_cast_synopsis(self):
+        movies = list(Movie.objects.order_by("title"))
+        with patch("search.gemini._post_gemini", return_value='[{"index": 0, "reason": "matches fantasy tone"}]') as mocked_post:
+            results = get_taste_profile_recommendations(
+                ["Recent search: magical fantasy journey"],
+                movies,
+                count=6,
+            )
+
+        prompt = mocked_post.call_args.args[0]
+        self.assertIn("genre, cast, synopsis", prompt)
+        self.assertIn("Recent search: magical fantasy journey", prompt)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][0], movies[0])
+
+    @override_settings(
+        IS_PRODUCTION=True,
+        USE_GEMINI=True,
+        GEMINI_API_KEY="production-key",
+    )
     def test_production_recommendations_use_catalog_gemini_without_watchlist(self):
         movie = Movie.objects.get(title="Spirited Away")
         with (
             patch("search.views.get_catalog_recommendations", return_value=[(movie, "A broad catalog pick.")]) as mocked_catalog,
+            patch("search.views.get_taste_profile_recommendations") as mocked_profile,
             patch("search.views.get_recommendations") as mocked_local_recs,
         ):
             response = self.client.get(reverse("recommended"))
@@ -170,6 +197,7 @@ class SearchViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Spirited Away")
         self.assertContains(response, "discovery picks curated")
+        mocked_profile.assert_not_called()
         mocked_catalog.assert_called_once()
         self.assertEqual(mocked_catalog.call_args.kwargs["count"], 24)
         mocked_local_recs.assert_not_called()
@@ -179,7 +207,7 @@ class SearchViewsTests(TestCase):
         USE_GEMINI=True,
         GEMINI_API_KEY="production-key",
     )
-    def test_production_watchlist_recommendations_request_larger_gemini_shelf(self):
+    def test_production_recommendations_use_gemini_taste_profile_from_watchlist(self):
         user = User.objects.create_user(username="prod-watchlist-user", password="pass12345")
         watched = Movie.objects.get(title="Spirited Away")
         recommended_movie = Movie.objects.get(title="The Grand Budapest Hotel")
@@ -187,7 +215,8 @@ class SearchViewsTests(TestCase):
         self.client.force_login(user)
 
         with (
-            patch("search.views.get_watchlist_recommendations", return_value=[(recommended_movie, "Matches the watchlist mood.")]) as mocked_watchlist,
+            patch("search.views.get_taste_profile_recommendations", return_value=[(recommended_movie, "Matches the watchlist mood.")]) as mocked_profile,
+            patch("search.views.get_watchlist_recommendations") as mocked_watchlist,
             patch("search.views.get_catalog_recommendations") as mocked_catalog,
             patch("search.views.get_recommendations") as mocked_local_recs,
         ):
@@ -196,8 +225,41 @@ class SearchViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "The Grand Budapest Hotel")
         self.assertContains(response, "based on your watchlist")
-        mocked_watchlist.assert_called_once()
-        self.assertEqual(mocked_watchlist.call_args.kwargs["count"], 24)
+        mocked_profile.assert_called_once()
+        self.assertIn("Genre: Fantasy", mocked_profile.call_args.args[0][0])
+        self.assertIn("Cast: Rumi Hiiragi", mocked_profile.call_args.args[0][0])
+        self.assertIn("Synopsis:", mocked_profile.call_args.args[0][0])
+        self.assertEqual(mocked_profile.call_args.kwargs["count"], 24)
+        mocked_watchlist.assert_not_called()
+        mocked_catalog.assert_not_called()
+        mocked_local_recs.assert_not_called()
+
+    @override_settings(
+        IS_PRODUCTION=True,
+        USE_GEMINI=True,
+        GEMINI_API_KEY="production-key",
+    )
+    def test_production_recommendations_use_gemini_taste_profile_from_history(self):
+        user = User.objects.create_user(username="prod-history-user", password="pass12345")
+        recommended_movie = Movie.objects.get(title="Spirited Away")
+        SearchHistory.objects.create(
+            user=user,
+            query_text="Fantasy stories with a young girl in a magical world",
+            result_count=3,
+        )
+        self.client.force_login(user)
+
+        with (
+            patch("search.views.get_taste_profile_recommendations", return_value=[(recommended_movie, "Matches recent fantasy searches.")]) as mocked_profile,
+            patch("search.views.get_catalog_recommendations") as mocked_catalog,
+            patch("search.views.get_recommendations") as mocked_local_recs,
+        ):
+            response = self.client.get(reverse("recommended"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Spirited Away")
+        mocked_profile.assert_called_once()
+        self.assertIn("Recent search: Fantasy stories", mocked_profile.call_args.args[0][0])
         mocked_catalog.assert_not_called()
         mocked_local_recs.assert_not_called()
 
@@ -253,6 +315,10 @@ class SearchViewsTests(TestCase):
         self.assertIn(".model-cache", settings.LOCAL_MODEL_CACHE_DIR.as_posix())
         self.assertEqual(os.environ.get("HF_HUB_OFFLINE"), "1")
         self.assertEqual(os.environ.get("TRANSFORMERS_OFFLINE"), "1")
+
+    def test_gemini_uses_stable_configurable_model(self):
+        self.assertEqual(settings.GEMINI_MODEL, "gemini-2.5-flash")
+        self.assertIn("/models/gemini-2.5-flash:generateContent", _gemini_url())
 
     @override_settings(LOCAL_DENSE_ENABLED=False)
     def test_local_dense_models_are_opt_in(self):
