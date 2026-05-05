@@ -54,6 +54,55 @@ def _extract_json(text: str):
         raise
 
 
+def _extract_ranked_picks(text: str) -> list[dict]:
+    """
+    Return ranked picks from Gemini output.
+
+    Production search intentionally asks for numeric JSON, but this parser also
+    tolerates older object output and partially malformed JSON that still
+    contains index/confidence fields.
+    """
+    try:
+        parsed = _extract_json(text)
+    except json.JSONDecodeError:
+        parsed = None
+
+    picks = []
+    if isinstance(parsed, list):
+        for item in parsed:
+            if isinstance(item, int):
+                picks.append({"index": item})
+            elif isinstance(item, dict):
+                picks.append(item)
+    elif isinstance(parsed, dict):
+        values = parsed.get("results") or parsed.get("movies") or parsed.get("picks")
+        if isinstance(values, list):
+            for item in values:
+                if isinstance(item, int):
+                    picks.append({"index": item})
+                elif isinstance(item, dict):
+                    picks.append(item)
+
+    if picks:
+        return picks
+
+    # Last-resort recovery for truncated object JSON like:
+    # [{"index": 3, "confidence": 0.91, "reason": "unterminated...
+    recovered = []
+    for match in re.finditer(
+        r'"index"\s*:\s*(\d+)(?:[^{}[\]]{0,120}?"confidence"\s*:\s*([0-9.]+))?',
+        text or "",
+    ):
+        pick = {"index": int(match.group(1))}
+        if match.group(2):
+            try:
+                pick["confidence"] = float(match.group(2))
+            except ValueError:
+                pass
+        recovered.append(pick)
+    return recovered
+
+
 def _post_gemini(prompt: str, *, temperature: float, max_output_tokens: int) -> str:
     resp = requests.post(
         _gemini_url(),
@@ -414,17 +463,18 @@ def rank_search_results(
         "Rank the best matching movies from the catalog below. Infer meaning "
         "rather than relying on exact keyword overlap. Prefer the movie that best "
         "matches the user's likely memory, even if the wording is indirect. Only "
-        "choose from numbered catalog entries.\n\n"
+        "choose from numbered catalog entries. For visual clues, infer likely "
+        "movies from title, cast, genre, synopsis, and known film context.\n\n"
         "CATALOG:\n"
         + "\n".join(_movie_catalog_lines(candidates))
-        + f"\n\nReturn ONLY a JSON array of up to {count} objects. "
-        'Each object must be: {"index": <number>, "confidence": <0-1>, '
-        '"reason": "<short semantic match reason>"}. '
-        "No markdown, no prose outside JSON."
+        + f"\n\nReturn ONLY a JSON array of up to {count} integer indexes, "
+        "ordered best to worst. Example: [12, 4, 19]. "
+        "Do not return objects, strings, reasons, markdown, or prose."
     )
 
     try:
-        picks = _extract_json(_post_gemini(prompt, temperature=0.15, max_output_tokens=1800))
+        raw = _post_gemini(prompt, temperature=0.0, max_output_tokens=300)
+        picks = _extract_ranked_picks(raw)
     except Exception as exc:
         logger.warning("Gemini semantic search failed: %s", exc)
         return []

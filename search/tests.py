@@ -15,6 +15,7 @@ from .gemini import (
     get_taste_profile_recommendations,
     rank_search_results,
     _extract_json,
+    _extract_ranked_picks,
     _gemini_url,
 )
 from .ai import get_bi_encoder
@@ -137,15 +138,53 @@ class SearchViewsTests(TestCase):
         GEMINI_API_KEY="production-key",
     )
     def test_gemini_semantic_search_can_rank_vague_query(self):
-        with patch("search.gemini._post_gemini", return_value='[{"index": 0, "confidence": 0.93, "reason": "spirit world clue"}]'):
+        with patch("search.gemini._post_gemini", return_value='[{"index": 0, "confidence": 0.93, "reason": "spirit world clue"}]') as mocked_post:
             results = rank_search_results(
                 "animated movie where a girl enters a strange spirit bathhouse",
                 [Movie.objects.get(title="Spirited Away")],
             )
 
+        prompt = mocked_post.call_args.args[0]
+        self.assertIn("integer indexes", prompt)
+        self.assertIn("Do not return objects", prompt)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0][0].title, "Spirited Away")
         self.assertAlmostEqual(results[0][1], 0.93)
+
+    @override_settings(
+        IS_PRODUCTION=True,
+        USE_GEMINI=True,
+        GEMINI_API_KEY="production-key",
+    )
+    def test_gemini_semantic_search_accepts_index_array(self):
+        movies = [
+            Movie.objects.get(title="Spirited Away"),
+            Movie.objects.get(title="The Grand Budapest Hotel"),
+        ]
+        with patch("search.gemini._post_gemini", return_value="[1, 0]"):
+            results = rank_search_results("a stylish concierge comedy", movies)
+
+        self.assertEqual([movie.title for movie, _ in results], [
+            "The Grand Budapest Hotel",
+            "Spirited Away",
+        ])
+
+    @override_settings(
+        IS_PRODUCTION=True,
+        USE_GEMINI=True,
+        GEMINI_API_KEY="production-key",
+    )
+    def test_gemini_semantic_search_recovers_from_truncated_reason_json(self):
+        broken = '[{"index": 0, "confidence": 0.91, "reason": "unterminated'
+        with patch("search.gemini._post_gemini", return_value=broken):
+            results = rank_search_results(
+                "women in red dress",
+                [Movie.objects.get(title="Spirited Away")],
+            )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][0].title, "Spirited Away")
+        self.assertAlmostEqual(results[0][1], 0.91)
 
     @override_settings(
         IS_PRODUCTION=True,
@@ -329,6 +368,10 @@ class SearchViewsTests(TestCase):
     def test_gemini_json_parser_accepts_wrapped_json(self):
         wrapped = 'Here are the picks:\n```json\n[{"index": 0, "reason": "match"}]\n```'
         self.assertEqual(_extract_json(wrapped)[0]["index"], 0)
+
+    def test_gemini_ranked_pick_parser_recovers_indexes_from_bad_json(self):
+        broken = '[{"index": 4, "confidence": 0.82, "reason": "cut off'
+        self.assertEqual(_extract_ranked_picks(broken)[0]["index"], 4)
 
     @override_settings(LOCAL_DENSE_ENABLED=False)
     def test_local_dense_models_are_opt_in(self):
