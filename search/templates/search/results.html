@@ -31,7 +31,7 @@
         {% if movies %}
             <div class="movie-grid">
                 {% for item in movies %}
-                    {% include "search/_movie_card.html" with movie=item.movie %}
+                    {% include "search/_movie_card.html" with movie=item.movie score_pct=item.score_pct matched_keywords=item.matched_keywords rank=item.rank %}
                 {% endfor %}
             </div>
         {% else %}

@@ -11,7 +11,7 @@ from django.views.decorators.http import require_POST
 
 from .models import Movie, SearchRecord, SearchHistory
 from accounts.models import WatchlistItem
-from .ai import explain_match_local, get_recommendations, search
+from .ai import explain_match_local, get_recommendations, search, tokenize, build_movie_text
 from .services import (
     get_filter_options,
     get_search_categories,
@@ -136,14 +136,17 @@ def results(request):
             .values_list("movie_id", flat=True)
         )
 
+    q_tokens = set(tokenize(flat_query)) if flat_query.strip() else set()
     results_data = [
         {
             "movie": movie,
             "score": score,
             "score_pct": min(100, max(0, int((score + 10) * 5))),
             "in_watchlist": movie.pk in watchlisted_ids,
+            "matched_keywords": sorted(q_tokens & set(tokenize(build_movie_text(movie))))[:6],
+            "rank": rank,
         }
-        for movie, score in raw_results
+        for rank, (movie, score) in enumerate(raw_results, start=1)
     ]
 
     return render(

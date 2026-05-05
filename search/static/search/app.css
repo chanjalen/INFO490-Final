@@ -752,12 +752,55 @@ img {
     flex: 1;
 }
 
+.movie-card__poster-wrap {
+    position: relative;
+}
+
 .movie-card__poster,
 .movie-card__poster--fallback {
     width: 100%;
     aspect-ratio: 3 / 4;
     border-radius: 20px 20px 0 0;
     object-fit: cover;
+}
+
+/* ── Match badge (overlaid on poster) ─────────────────────── */
+.match-badge {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(12, 18, 8, 0.70);
+    backdrop-filter: blur(8px);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.match-badge--strong { color: #9FBF6E; }
+.match-badge--good   { color: #AFC681; }
+.match-badge--weak   { color: #C6CF9A; }
+
+/* ── Keyword match tags ────────────────────────────────────── */
+.movie-card__kw-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.kw-tag {
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(110, 143, 78, 0.3);
+    background: rgba(110, 143, 78, 0.07);
+    color: #6E8F4E;
+    font-size: 0.67rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
 }
 
 .movie-card__poster--fallback,

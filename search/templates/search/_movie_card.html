@@ -1,13 +1,20 @@
 <article class="movie-card">
     <a class="movie-card__link" href="{% url 'movie_detail' movie.id %}">
-        {% if movie.poster_url %}
-            <img class="movie-card__poster" src="{{ movie.poster_url }}" alt="{{ movie.title }} poster">
-        {% else %}
-            <div class="movie-card__poster movie-card__poster--fallback" aria-hidden="true">
-                <span>{{ movie.title|slice:":1" }}</span>
-                <small>{{ movie.release_year|default:"Film" }}</small>
-            </div>
-        {% endif %}
+        <div class="movie-card__poster-wrap">
+            {% if movie.poster_url %}
+                <img class="movie-card__poster" src="{{ movie.poster_url }}" alt="{{ movie.title }} poster">
+            {% else %}
+                <div class="movie-card__poster movie-card__poster--fallback" aria-hidden="true">
+                    <span>{{ movie.title|slice:":1" }}</span>
+                    <small>{{ movie.release_year|default:"Film" }}</small>
+                </div>
+            {% endif %}
+            {% if score_pct %}
+                <div class="match-badge {% if score_pct >= 65 %}match-badge--strong{% elif score_pct >= 50 %}match-badge--good{% else %}match-badge--weak{% endif %}">
+                    #{{ rank }} &middot; {{ score_pct }}%
+                </div>
+            {% endif %}
+        </div>
 
         <div class="movie-card__body">
             <div class="movie-card__meta">
@@ -20,6 +27,13 @@
                 {% if movie.cast %} · {{ movie.cast|truncatechars:48 }}{% endif %}
             </p>
             <p class="movie-card__synopsis">{{ movie.synopsis|default:"No synopsis available yet."|truncatewords:28 }}</p>
+            {% if matched_keywords %}
+                <div class="movie-card__kw-row">
+                    {% for kw in matched_keywords %}
+                        <span class="kw-tag">{{ kw }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
     </a>
 
