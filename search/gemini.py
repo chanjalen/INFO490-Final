@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta"
-    "/models/gemini-1.5-flash-latest:generateContent"
+    "/models/gemini-2.5-flash-preview-04-17:generateContent"
 )
 
 
