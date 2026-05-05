@@ -13,7 +13,11 @@ from django.views.decorators.http import require_POST
 from .models import Movie, SearchRecord, SearchHistory
 from accounts.models import WatchlistItem
 from .ai import explain_match_local, get_recommendations, search, tokenize, build_movie_text
-from .gemini import get_watchlist_recommendations, search_with_gemini
+from .gemini import (
+    get_catalog_recommendations,
+    get_watchlist_recommendations,
+    search_with_gemini,
+)
 from .services import (
     get_filter_options,
     get_search_categories,
@@ -301,9 +305,16 @@ def recommended(request):
 
     if settings.IS_PRODUCTION:
         rec_data = []
-        if watchlist_movies and settings.USE_GEMINI:
-            candidates = [m for m in all_movies if m.pk not in watchlisted_ids][:50]
-            gemini_recs = get_watchlist_recommendations(watchlist_movies, candidates, count=10)
+        if settings.USE_GEMINI:
+            if watchlist_movies:
+                candidates = [m for m in all_movies if m.pk not in watchlisted_ids][:150]
+                gemini_recs = get_watchlist_recommendations(
+                    watchlist_movies,
+                    candidates,
+                    count=24,
+                )
+            else:
+                gemini_recs = get_catalog_recommendations(all_movies[:200], count=24)
             rec_data = [
                 {
                     "movie":        movie,

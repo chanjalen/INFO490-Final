@@ -9,7 +9,11 @@
         <h1 class="section-title">Recommendations</h1>
         <p class="section-copy">
             {% if source == "gemini" %}
-                Powered by Gemini AI — {{ recommendations|length }} picks chosen from the catalogue based on your watchlist.
+                {% if watchlist_count %}
+                    Powered by Gemini AI - {{ recommendations|length }} picks chosen from the catalogue based on your watchlist.
+                {% else %}
+                    Powered by Gemini AI - {{ recommendations|length }} discovery picks curated from the current catalogue.
+                {% endif %}
             {% elif source == "ai" %}
                 These suggestions reflect the genres, themes, and patterns from your recent searches.
             {% elif source == "session" %}
@@ -29,7 +33,9 @@
         <div class="empty-state">
             <p class="empty-state__title">Nothing to show yet.</p>
             <p>
-                {% if request.user.is_authenticated %}
+                {% if source == "gemini" %}
+                    Gemini recommendations are unavailable right now. Make sure the production API key is configured.
+                {% elif request.user.is_authenticated %}
                     Add movies to your watchlist and we'll personalise recommendations for you.
                     <a class="text-link" href="{% url 'results' %}">Start searching</a>
                 {% else %}

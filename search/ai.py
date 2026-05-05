@@ -3,14 +3,16 @@ import logging
 import math
 import string
 import importlib.util
+import os
 import sys
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # Heavy ML libraries — not installed on Render free tier.
 # When absent the search pipeline falls back to BM25-only.
-DENSE_AVAILABLE = all(
+DENSE_LIBS_AVAILABLE = all(
     importlib.util.find_spec(name) is not None
     for name in ("numpy", "sentence_transformers", "sklearn")
 ) and "test" not in sys.argv
@@ -27,25 +29,71 @@ _bm25_index    = None
 _bm25_pks      = None
 
 
+def _dense_enabled() -> bool:
+    if not DENSE_LIBS_AVAILABLE:
+        return False
+    try:
+        from django.conf import settings
+        return bool(getattr(settings, "LOCAL_DENSE_ENABLED", False))
+    except Exception:
+        return os.environ.get("LOCAL_DENSE_ENABLED", "False") == "True"
+
+
+def _model_cache_dir(*parts: str) -> str | None:
+    try:
+        from django.conf import settings
+        root = getattr(settings, "LOCAL_MODEL_CACHE_DIR", None)
+    except Exception:
+        root = None
+    if not root:
+        return None
+    path = Path(root, *parts)
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
 def get_bi_encoder():
-    if not DENSE_AVAILABLE:
+    if not _dense_enabled():
         return None
     global _bi_encoder
     if _bi_encoder is None:
         from sentence_transformers import SentenceTransformer
         logger.info("Loading bi-encoder: %s", BI_ENCODER_MODEL)
-        _bi_encoder = SentenceTransformer(BI_ENCODER_MODEL)
+        try:
+            _bi_encoder = SentenceTransformer(
+                BI_ENCODER_MODEL,
+                cache_folder=_model_cache_dir("sentence-transformers"),
+                local_files_only=True,
+            )
+        except TypeError:
+            _bi_encoder = SentenceTransformer(
+                BI_ENCODER_MODEL,
+                cache_folder=_model_cache_dir("sentence-transformers"),
+            )
+        except Exception as exc:
+            logger.warning("Bi-encoder cache load failed: %s", exc)
+            return None
     return _bi_encoder
 
 
 def get_cross_encoder():
-    if not DENSE_AVAILABLE:
+    if not _dense_enabled():
         return None
     global _cross_encoder
     if _cross_encoder is None:
         from sentence_transformers import CrossEncoder
         logger.info("Loading cross-encoder: %s", CROSS_ENCODER_MODEL)
-        _cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL, max_length=512)
+        try:
+            _cross_encoder = CrossEncoder(
+                CROSS_ENCODER_MODEL,
+                max_length=512,
+                local_files_only=True,
+            )
+        except TypeError:
+            _cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL, max_length=512)
+        except Exception as exc:
+            logger.warning("Cross-encoder cache load failed: %s", exc)
+            return None
     return _cross_encoder
 
 
@@ -54,7 +102,18 @@ def get_flan_pipeline():
     if _flan_pipeline is None:
         logger.info("Loading FLAN-T5: %s", FLAN_T5_MODEL)
         from transformers import pipeline
-        _flan_pipeline = pipeline("text2text-generation", model=FLAN_T5_MODEL)
+        try:
+            _flan_pipeline = pipeline(
+                "text2text-generation",
+                model=FLAN_T5_MODEL,
+                model_kwargs={
+                    "cache_dir": _model_cache_dir("huggingface"),
+                    "local_files_only": True,
+                },
+            )
+        except Exception as exc:
+            logger.warning("FLAN-T5 cache load failed: %s", exc)
+            raise
     return _flan_pipeline
 
 
@@ -143,12 +202,14 @@ def bm25_search(query: str, movies: list, top_k: int = 50) -> list[tuple]:
 # =============================================================================
 
 def semantic_search(query: str, movies: list, top_k: int = 50) -> list[tuple]:
-    if not DENSE_AVAILABLE or not movies or not query.strip():
+    if not _dense_enabled() or not movies or not query.strip():
         return []
     import numpy as np
     from sklearn.metrics.pairwise import cosine_similarity
 
     model     = get_bi_encoder()
+    if model is None:
+        return []
     query_vec = model.encode(query, show_progress_bar=False)
     results   = []
     for movie in movies:
@@ -188,9 +249,11 @@ def reciprocal_rank_fusion(*ranked_lists: list[tuple], k: int = 60) -> list[tupl
 # =============================================================================
 
 def rerank(query: str, candidates: list[tuple], top_k: int = 10) -> list[tuple]:
-    if not DENSE_AVAILABLE or not candidates:
+    if not _dense_enabled() or not candidates:
         return candidates[:top_k]
     ce    = get_cross_encoder()
+    if ce is None:
+        return candidates[:top_k]
     pairs = [(query, build_movie_text(m)) for m, _ in candidates]
     scores = ce.predict(pairs, show_progress_bar=False).tolist()
     reranked = sorted(
@@ -228,7 +291,7 @@ def search(
 
     bm25_results = bm25_search(query, movies, top_k=bm25_candidates)
 
-    if not DENSE_AVAILABLE:
+    if not _dense_enabled():
         # Lightweight mode: BM25 only, scores normalised to [0, 1]
         results = bm25_results[:top_k]
         if results:
@@ -308,13 +371,15 @@ def get_recommendations(
     Returns [] when DENSE_AVAILABLE is False — views.py falls through to
     session-based (Tier 2) or editorial (Tier 3) recommendations.
     """
-    if not DENSE_AVAILABLE or not search_history or not all_movies:
+    if not _dense_enabled() or not search_history or not all_movies:
         return []
     import numpy as np
     from sklearn.metrics.pairwise import cosine_similarity
 
     exclude_ids = exclude_ids or set()
     model   = get_bi_encoder()
+    if model is None:
+        return []
     queries = [h.query_text for h in search_history[:10] if h.query_text.strip()]
     if not queries:
         return []
@@ -344,12 +409,14 @@ def get_recommendations(
 # =============================================================================
 
 def embed_text(text: str) -> list[float]:
-    if not DENSE_AVAILABLE:
-        raise RuntimeError("sentence-transformers not installed. Run: pip install -r requirements-dev.txt")
-    return get_bi_encoder().encode(text, show_progress_bar=False).tolist()
+    model = get_bi_encoder()
+    if model is None:
+        raise RuntimeError("Local dense models are disabled or missing from cache. Set LOCAL_DENSE_ENABLED=True after caching the model.")
+    return model.encode(text, show_progress_bar=False).tolist()
 
 
 def embed_batch(texts: list[str]) -> list[list[float]]:
-    if not DENSE_AVAILABLE:
-        raise RuntimeError("sentence-transformers not installed. Run: pip install -r requirements-dev.txt")
-    return get_bi_encoder().encode(texts, batch_size=64, show_progress_bar=False).tolist()
+    model = get_bi_encoder()
+    if model is None:
+        raise RuntimeError("Local dense models are disabled or missing from cache. Set LOCAL_DENSE_ENABLED=True after caching the model.")
+    return model.encode(texts, batch_size=64, show_progress_bar=False).tolist()

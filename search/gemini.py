@@ -32,10 +32,46 @@ def _gemini_enabled() -> bool:
     return bool(getattr(settings, "USE_GEMINI", False) and _api_key())
 
 
+def _extract_json(text: str):
+    raw = re.sub(r"```(?:json)?", "", text).strip().strip("`").strip()
+    return json.loads(raw)
+
+
+def _post_gemini(prompt: str, *, temperature: float, max_output_tokens: int) -> str:
+    resp = requests.post(
+        GEMINI_URL,
+        params={"key": _api_key()},
+        json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_output_tokens,
+            },
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+
+def _movie_catalog_lines(movies: list, synopsis_chars: int = 260) -> list[str]:
+    lines = []
+    for i, movie in enumerate(movies):
+        lines.append(
+            f"[{i}] {movie.title} ({movie.release_year or 'N/A'}): "
+            f"Genre: {movie.genre or 'Unknown'}. "
+            f"Language: {movie.language or 'Unknown'}. "
+            f"Director: {getattr(movie, 'director', '') or 'Unknown'}. "
+            f"Cast: {(movie.cast or '')[:120]}. "
+            f"Synopsis: {(movie.synopsis or '')[:synopsis_chars]}"
+        )
+    return lines
+
+
 def get_watchlist_recommendations(
     watchlist_movies: list,
     candidate_movies: list,
-    count: int = 10,
+    count: int = 24,
 ) -> list[tuple]:
     """
     Ask Gemini to select `count` movies from candidates that best match
@@ -56,6 +92,7 @@ def get_watchlist_recommendations(
         return []
     if not api_key or not watchlist_movies or not candidate_movies:
         return []
+    target_count = min(count, len(candidate_movies))
 
     # ── Compact watchlist summary ─────────────────────────────────────────────
     wl_lines = []
@@ -80,12 +117,12 @@ def get_watchlist_recommendations(
     prompt = (
         "A movie fan loves these films:\n"
         + "\n".join(wl_lines)
-        + f"\n\nFrom the candidates below, pick exactly {count} that this user "
+        + f"\n\nFrom the candidates below, pick up to {target_count} that this user "
         "would enjoy most. Base your picks on genre, cast style, tone, and "
         "thematic similarity to their watchlist. Avoid duplicates.\n\n"
         "CANDIDATES:\n"
         + "\n".join(cand_lines)
-        + f"\n\nReturn ONLY a JSON array of exactly {count} objects. "
+        + f"\n\nReturn ONLY a JSON array of up to {target_count} objects. "
         'Each object: {"index": <number from brackets>, '
         '"reason": "<1-2 sentence personalised explanation>"}\n'
         "No markdown, no extra text — just the raw JSON array."
@@ -105,10 +142,7 @@ def get_watchlist_recommendations(
         )
         resp.raise_for_status()
         raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-
-        # Strip markdown code fences Gemini sometimes wraps around JSON
-        raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
-        picks = json.loads(raw)
+        picks = _extract_json(raw)
 
         results = []
         seen_pks = set()
@@ -122,7 +156,7 @@ def get_watchlist_recommendations(
                 continue
             seen_pks.add(movie.pk)
             results.append((movie, reason))
-            if len(results) >= count:
+            if len(results) >= target_count:
                 break
 
         logger.info("Gemini returned %d recommendations", len(results))
@@ -130,6 +164,60 @@ def get_watchlist_recommendations(
 
     except Exception as exc:
         logger.warning("Gemini recommendation failed: %s", exc)
+        return []
+
+
+def get_catalog_recommendations(
+    candidate_movies: list,
+    count: int = 24,
+) -> list[tuple]:
+    """
+    Ask Gemini to curate a broad recommendation shelf from the catalog.
+
+    This powers production recommendations for logged-out users and users who
+    have not built a watchlist yet, while keeping Render fully Gemini-only.
+    """
+    if not _gemini_enabled() or not candidate_movies:
+        return []
+
+    target_count = min(count, len(candidate_movies))
+    prompt = (
+        "You are curating the recommendation tab for a movie finder app. Pick a "
+        "large, diverse shelf from the catalog below. Balance crowd-pleasers, "
+        "critically liked titles, different genres, languages, eras, moods, and "
+        "hidden gems. Choose movies that are likely to help a new user discover "
+        "the catalog quickly. Only choose from numbered catalog entries.\n\n"
+        "CATALOG:\n"
+        + "\n".join(_movie_catalog_lines(candidate_movies, synopsis_chars=220))
+        + f"\n\nReturn ONLY a JSON array of up to {target_count} objects. "
+        'Each object must be: {"index": <number>, '
+        '"reason": "<1 sentence discovery reason>"}. '
+        "No markdown, no prose outside JSON."
+    )
+
+    try:
+        picks = _extract_json(
+            _post_gemini(prompt, temperature=0.35, max_output_tokens=3000)
+        )
+        results = []
+        seen_pks = set()
+        for pick in picks:
+            idx = pick.get("index")
+            reason = pick.get("reason", "A strong discovery pick from the current catalog.")
+            if not isinstance(idx, int) or not (0 <= idx < len(candidate_movies)):
+                continue
+            movie = candidate_movies[idx]
+            if movie.pk in seen_pks:
+                continue
+            seen_pks.add(movie.pk)
+            results.append((movie, reason))
+            if len(results) >= target_count:
+                break
+
+        logger.info("Gemini returned %d catalog recommendations", len(results))
+        return results
+    except Exception as exc:
+        logger.warning("Gemini catalog recommendation failed: %s", exc)
         return []
 
 
@@ -220,6 +308,71 @@ def find_search_candidates(
     return selected
 
 
+def rank_search_results(
+    query: str,
+    catalog_movies: list,
+    count: int = 10,
+    max_catalog: int = 700,
+) -> list[tuple]:
+    """
+    Production search path: Gemini semantically ranks the final movie results.
+
+    This is intentionally Gemini-only: no BM25 or local model fallback is used.
+    Vague clues are handled by asking Gemini to infer likely plot, mood, scene,
+    visual, character, dialogue, and thematic matches across the catalog.
+    """
+    if not _gemini_enabled():
+        return []
+    query = (query or "").strip()
+    if not query or not catalog_movies:
+        return []
+
+    candidates = catalog_movies[:max_catalog]
+    prompt = (
+        "You are the semantic search engine for a movie finder app. A user may "
+        "describe a movie vaguely, by mood, scene memory, character detail, plot "
+        "fragment, visual image, quote, actor, theme, or approximate year.\n\n"
+        f'USER SEARCH: "{query}"\n\n'
+        "Rank the best matching movies from the catalog below. Infer meaning "
+        "rather than relying on exact keyword overlap. Prefer the movie that best "
+        "matches the user's likely memory, even if the wording is indirect. Only "
+        "choose from numbered catalog entries.\n\n"
+        "CATALOG:\n"
+        + "\n".join(_movie_catalog_lines(candidates))
+        + f"\n\nReturn ONLY a JSON array of up to {count} objects. "
+        'Each object must be: {"index": <number>, "confidence": <0-1>, '
+        '"reason": "<short semantic match reason>"}. '
+        "No markdown, no prose outside JSON."
+    )
+
+    try:
+        picks = _extract_json(_post_gemini(prompt, temperature=0.15, max_output_tokens=1800))
+    except Exception as exc:
+        logger.warning("Gemini semantic search failed: %s", exc)
+        return []
+
+    results = []
+    seen_pks = set()
+    for rank, pick in enumerate(picks):
+        idx = pick.get("index")
+        if not isinstance(idx, int) or not (0 <= idx < len(candidates)):
+            continue
+        movie = candidates[idx]
+        if movie.pk in seen_pks:
+            continue
+        seen_pks.add(movie.pk)
+        try:
+            confidence = float(pick.get("confidence", 1.0 - (rank * 0.07)))
+        except (TypeError, ValueError):
+            confidence = 1.0 - (rank * 0.07)
+        results.append((movie, min(1.0, max(0.1, confidence))))
+        if len(results) >= count:
+            break
+
+    logger.info("Gemini semantic search returned %d results", len(results))
+    return results
+
+
 def search_with_gemini(
     query: str,
     catalog_movies: list,
@@ -232,8 +385,4 @@ def search_with_gemini(
     existing result card UI can keep showing match percentages without invoking
     local ranking models.
     """
-    movies = find_search_candidates(query, catalog_movies, count=count)
-    return [
-        (movie, max(0.1, 1.0 - (rank * 0.07)))
-        for rank, movie in enumerate(movies)
-    ]
+    return rank_search_results(query, catalog_movies, count=count)

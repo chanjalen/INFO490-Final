@@ -34,12 +34,15 @@ FLAN_T5_ENABLED = (
 LOCAL_MODEL_CACHE_DIR = Path(
     os.environ.get("LOCAL_MODEL_CACHE_DIR", BASE_DIR / ".model-cache")
 )
+LOCAL_DENSE_ENABLED = os.environ.get("LOCAL_DENSE_ENABLED", "False") == "True"
 if not IS_PRODUCTION:
     os.environ.setdefault("HF_HOME", str(LOCAL_MODEL_CACHE_DIR / "huggingface"))
     os.environ.setdefault(
         "SENTENCE_TRANSFORMERS_HOME",
         str(LOCAL_MODEL_CACHE_DIR / "sentence-transformers"),
     )
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
