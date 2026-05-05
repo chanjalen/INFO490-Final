@@ -43,6 +43,23 @@
                     <p>{{ movie.synopsis }}</p>
                 </div>
             {% endif %}
+
+            {% if request.user.is_authenticated %}
+            <div class="rec-card__actions" style="margin-top:8px;">
+                <button
+                    class="wl-btn wl-btn--watchlist {% if in_watchlist %}wl-btn--active{% endif %}"
+                    data-movie-id="{{ movie.id }}"
+                    data-url="{% url 'accounts:toggle_watchlist' movie.id %}"
+                    aria-label="{% if in_watchlist %}Remove from watchlist{% else %}Add to watchlist{% endif %}"
+                    aria-pressed="{% if in_watchlist %}true{% else %}false{% endif %}"
+                >
+                    <svg class="wl-btn__icon" width="15" height="15" viewBox="0 0 24 24" fill="{% if in_watchlist %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span class="wl-btn__label">{% if in_watchlist %}In Watchlist{% else %}Add to Watchlist{% endif %}</span>
+                </button>
+            </div>
+            {% endif %}
         </div>
     </div>
 

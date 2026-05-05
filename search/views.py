@@ -89,11 +89,20 @@ def results(request):
     if not movie_list:
         messages.info(
             request,
-            "No movies found. Run: python manage.py load_sample_movies && "
-            "python manage.py embed_movies",
+            "No movies found. Run: python manage.py fetch_tmdb_movies",
         )
         return render(request, "search/results.html", {
-            "query": query, "results": [], "flat_query": flat_query,
+            "active_page":       "search",
+            "categories":        get_search_categories(),
+            "filters":           get_filter_options(),
+            "query":             query,
+            "flat_query":        flat_query,
+            "movies":            [],
+            "has_search":        bool(flat_query or genre or language or year),
+            "selected_genre":    genre,
+            "selected_language": language,
+            "selected_year":     year,
+            "watchlist_ids":     _watchlist_ids(request),
         })
 
     raw_results = search(flat_query, movie_list, top_k=10)
@@ -161,7 +170,7 @@ def results(request):
             "query": query,
             "query_groups": query_groups,
             "movies": results_data,
-            "has_search": len(results_data) > 0,
+            "has_search": bool(flat_query or genre or language or year),
             "selected_genre": genre,
             "selected_language": language,
             "selected_year": year,
@@ -179,9 +188,24 @@ def movie_detail(request, pk):
         request.user.is_authenticated
         and WatchlistItem.objects.filter(user=request.user, movie=movie).exists()
     )
+
+    # Related: same genre, excluding this movie, up to 6
+    related_movies = []
+    if movie.genre:
+        primary_genre = movie.genre.split(",")[0].strip()
+        related_movies = list(
+            Movie.objects.filter(genre__icontains=primary_genre)
+            .exclude(pk=movie.pk)
+            .order_by("-release_year")[:6]
+        )
+
+    watchlist_ids = _watchlist_ids(request)
+
     return render(request, "search/movie_detail.html", {
-        "movie":        movie,
-        "in_watchlist": in_watchlist,
+        "movie":          movie,
+        "in_watchlist":   in_watchlist,
+        "related_movies": related_movies,
+        "watchlist_ids":  watchlist_ids,
     })
 
 
