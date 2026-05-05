@@ -19,8 +19,9 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-secret-key")
-TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "dev-only-tmdb-api-key")
+SECRET_KEY    = os.environ.get("SECRET_KEY", "dev-only-secret-key")
+TMDB_API_KEY  = os.environ.get("TMDB_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 ALLOWED_HOSTS = [
     host.strip()

@@ -235,32 +235,85 @@ def clear_history(request):
 
 def recommended(request):
     """
-    Three-tier recommendation system:
+    Four-tier recommendation system (highest priority first):
 
-    Tier 1 (best): AI embedding-based ranking via ai_engine.get_recommendations()
-                   + human-readable reasons via services.build_recommendation_reasons()
-                   Requires: login + DB search history
+    Tier 0 (best): Gemini API — picks 10 movies from the catalogue that
+                   best match the user's watchlist by genre, cast, and synopsis.
+                   Requires: login + non-empty watchlist + GEMINI_API_KEY env var.
 
-    Tier 2:        Session token-counting approach (original services.py logic)
-                   Requires: session search history (no login needed)
+    Tier 1:        AI embedding-based ranking (bi-encoder taste profile).
+                   Requires: login + DB search history + sentence-transformers.
 
-    Tier 3:        Editorial defaults — most recent movies in the catalogue
+    Tier 2:        Session token-counting (genre/language/keyword overlap).
+                   Requires: session search history (no login needed).
+
+    Tier 3:        Editorial defaults — most recent movies in the catalogue.
     """
-    all_movies = list(Movie.objects.exclude(embedding=""))
+    from django.conf import settings as django_settings
+    from .gemini import get_watchlist_recommendations
+
+    all_movies = list(Movie.objects.all().order_by("-release_year"))
 
     watchlisted_ids = set()
+    watchlist_movies = []
     if request.user.is_authenticated:
-        watchlisted_ids = set(
+        wl_qs = (
             WatchlistItem.objects.filter(user=request.user)
-            .values_list("movie_id", flat=True)
+            .select_related("movie")
+            .order_by("-added_at")
         )
+        watchlist_movies = [item.movie for item in wl_qs[:15]]
+        watchlisted_ids  = {m.pk for m in watchlist_movies}
+
+    # ── Tier 0: Gemini watchlist recommendations ──────────────────────────────
+    gemini_key = getattr(django_settings, "GEMINI_API_KEY", "")
+    if watchlist_movies and gemini_key:
+        # Pre-filter candidates by genre overlap with watchlist so the prompt
+        # stays compact and results stay relevant.
+        watchlist_genres = set()
+        for m in watchlist_movies:
+            for g in (m.genre or "").split(","):
+                g = g.strip().lower()
+                if g:
+                    watchlist_genres.add(g)
+
+        scored_candidates = []
+        for m in all_movies:
+            if m.pk in watchlisted_ids:
+                continue
+            movie_genres = {g.strip().lower() for g in (m.genre or "").split(",") if g.strip()}
+            overlap = len(watchlist_genres & movie_genres)
+            scored_candidates.append((overlap, m))
+
+        scored_candidates.sort(key=lambda x: -x[0])
+        candidates = [m for _, m in scored_candidates[:50]]
+
+        gemini_recs = get_watchlist_recommendations(watchlist_movies, candidates, count=10)
+        if gemini_recs:
+            rec_data = [
+                {
+                    "movie":        movie,
+                    "reason":       reason,
+                    "score_pct":    None,
+                    "in_watchlist": movie.pk in watchlisted_ids,
+                }
+                for movie, reason in gemini_recs
+            ]
+            return render(request, "search/recommended.html", {
+                "recommendations":  rec_data,
+                "is_editorial":     False,
+                "source":           "gemini",
+                "watchlist_count":  len(watchlist_movies),
+                "watchlist_ids":    watchlisted_ids,
+            })
 
     # ── Tier 1: AI embedding recommendations ─────────────────────────────────
+    embedded_movies = [m for m in all_movies if m.embedding]
     if request.user.is_authenticated:
         db_history = list(SearchHistory.objects.filter(user=request.user)[:10])
         if db_history:
             ai_recs = get_recommendations(
-                db_history, all_movies, count=6, exclude_ids=watchlisted_ids
+                db_history, embedded_movies, count=10, exclude_ids=watchlisted_ids
             )
             if ai_recs:
                 rec_movies = [movie for movie, _ in ai_recs]
@@ -281,6 +334,7 @@ def recommended(request):
                     "recommendations": rec_data,
                     "is_editorial":    False,
                     "source":          "ai",
+                    "watchlist_ids":   watchlisted_ids,
                 })
 
     # ── Tier 2: Session token-counting ───────────────────────────────────────
@@ -325,17 +379,18 @@ def recommended(request):
                 "score_pct":    None,
                 "in_watchlist": movie.pk in watchlisted_ids,
             }
-            for _, _, movie, reasons in scored[:6]
+            for _, _, movie, reasons in scored[:10]
         ]
         if rec_data:
             return render(request, "search/recommended.html", {
                 "recommendations": rec_data,
                 "is_editorial":    False,
                 "source":          "session",
+                "watchlist_ids":   watchlisted_ids,
             })
 
     # ── Tier 3: Editorial fallback ────────────────────────────────────────────
-    editorial = Movie.objects.exclude(embedding="").order_by("-release_year")[:6]
+    editorial = Movie.objects.order_by("-release_year")[:10]
     rec_data  = [
         {
             "movie":        m,
@@ -349,6 +404,7 @@ def recommended(request):
         "recommendations": rec_data,
         "is_editorial":    True,
         "source":          "editorial",
+        "watchlist_ids":   watchlisted_ids,
     })
 
 

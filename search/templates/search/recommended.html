@@ -8,14 +8,36 @@
         <p class="eyebrow">Curated for you</p>
         <h1 class="section-title">Recommendations</h1>
         <p class="section-copy">
-            {% if based_on_history %}
-                These suggestions reflect the genres, languages, and clues from your recent searches.
+            {% if source == "gemini" %}
+                Powered by Gemini AI — {{ recommendations|length }} picks chosen from the catalogue based on your watchlist.
+            {% elif source == "ai" %}
+                These suggestions reflect the genres, themes, and patterns from your recent searches.
+            {% elif source == "session" %}
+                Based on your recent search activity in this session.
             {% else %}
-                Your recommendation profile is empty, so here are strong starting points from the current catalog.
+                Your recommendation profile is still building — here are strong starting points from the current catalogue.
             {% endif %}
         </p>
+        {% if source == "gemini" and watchlist_count %}
+            <p class="section-copy" style="opacity:0.6;font-size:0.9rem;">
+                Analysed {{ watchlist_count }} movie{{ watchlist_count|pluralize }} from your watchlist &middot; genre &middot; cast &middot; synopsis
+            </p>
+        {% endif %}
     </div>
 
+    {% if not recommendations %}
+        <div class="empty-state">
+            <p class="empty-state__title">Nothing to show yet.</p>
+            <p>
+                {% if request.user.is_authenticated %}
+                    Add movies to your watchlist and we'll personalise recommendations for you.
+                    <a class="text-link" href="{% url 'results' %}">Start searching</a>
+                {% else %}
+                    <a class="text-link" href="{% url 'accounts:login' %}">Log in</a> to get personalised recommendations.
+                {% endif %}
+            </p>
+        </div>
+    {% else %}
     <div class="recommendation-list">
         {% for item in recommendations %}
             <article class="recommendation-card">
@@ -37,10 +59,16 @@
                     <h2>{{ item.movie.title }}</h2>
                     <p class="recommendation-card__meta">
                         {% if item.movie.release_year %}{{ item.movie.release_year }}{% endif %}
-                        {% if item.movie.language %} - {{ item.movie.language }}{% endif %}
+                        {% if item.movie.language %} &middot; {{ item.movie.language }}{% endif %}
+                        {% if item.movie.director %} &middot; dir. {{ item.movie.director }}{% endif %}
                     </p>
+                    {% if item.movie.cast %}
+                        <p class="recommendation-card__meta" style="font-size:0.88rem;opacity:0.7;">{{ item.movie.cast|truncatechars:80 }}</p>
+                    {% endif %}
                     <div class="recommendation-card__reason">
-                        <span class="pill pill--soft">Why it fits</span>
+                        <span class="pill pill--soft">
+                            {% if source == "gemini" %}Gemini pick{% elif source == "ai" %}AI match{% else %}Why it fits{% endif %}
+                        </span>
                         <p>{{ item.reason }}</p>
                     </div>
                     <p class="recommendation-card__copy">{{ item.movie.synopsis|truncatewords:40 }}</p>
@@ -71,5 +99,6 @@
             </article>
         {% endfor %}
     </div>
+    {% endif %}
 </section>
 {% endblock %}
