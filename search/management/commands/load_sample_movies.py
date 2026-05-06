@@ -78,7 +78,7 @@ SAMPLE_MOVIES = [
         "director": "Michel Gondry",
         "release_year": 2004,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/5MwkWH9tYHv3mV9OqYdjuDEam4x.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/5MwkWH9tYHv3mV9OdYTMR5qreIz.jpg",
     },
     {
         "title": "Interstellar",
@@ -128,7 +128,7 @@ SAMPLE_MOVIES = [
         "director": "Stephen Chbosky",
         "release_year": 2012,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/3tTMOBQMBVF0ym9hLRBBzW6LCUC.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/aKCvdFFF5n80P2VdS7d8YBwbCjh.jpg",
     },
     {
         "title": "Psycho",
@@ -178,7 +178,7 @@ SAMPLE_MOVIES = [
         "director": "Jean-Pierre Jeunet",
         "release_year": 2001,
         "language": "French",
-        "poster_url": "https://image.tmdb.org/t/p/w500/ftODZXaXral5GpfOPnq5HBhGqpT.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/nSxDa3M9aMvGVLoItzWTepQ5h5d.jpg",
     },
     {
         "title": "Whiplash",
@@ -212,7 +212,7 @@ SAMPLE_MOVIES = [
         "director": "Spike Jonze",
         "release_year": 2013,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/eCOtqtfvn7mxGaFxDqmrUJnmgck.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/eCOtqtfvn7mxGl6nfmq4b1exJRc.jpg",
     },
     {
         "title": "The Queen's Gambit",
@@ -296,7 +296,7 @@ SAMPLE_MOVIES = [
         "director": "David Lynch",
         "release_year": 2001,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/wQPpGJBUGGYfn5VtSnVnfkBCwj2.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/x7A59t6ySylr1L7aubOQEA480vM.jpg",
     },
     {
         "title": "The Social Network",
@@ -329,7 +329,7 @@ SAMPLE_MOVIES = [
         "director": "Sofia Coppola",
         "release_year": 2003,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/jiGP6rUKy0Z4HUF1kzp7j5JLeak.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/3jCLmYDIIiSMPujbwygNpqdpM8N.jpg",
     },
     {
         "title": "Moonlight",
@@ -346,7 +346,7 @@ SAMPLE_MOVIES = [
         "director": "Barry Jenkins",
         "release_year": 2016,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/4911T5FbJ9eAlntig4Gu7K4Mz9l.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/qLnfEmPrDjJfPyyddLJPkXmshkp.jpg",
     },
     {
         "title": "Get Out",
@@ -397,7 +397,7 @@ SAMPLE_MOVIES = [
         "director": "Céline Sciamma",
         "release_year": 2019,
         "language": "French",
-        "poster_url": "https://image.tmdb.org/t/p/w500/3NTAbAiao4JLzFsBE6jVNUsEDv4.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/2LquGwEhbg3soxSCs9VNyh5VJd9.jpg",
     },
     {
         "title": "Drive",
@@ -414,7 +414,7 @@ SAMPLE_MOVIES = [
         "director": "Nicolas Winding Refn",
         "release_year": 2011,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/602vevIURmpjn9kZH5e5ZGJAYAO.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/602vevIURmpDfzbnv5Ubi6wIkQm.jpg",
     },
     {
         "title": "Hereditary",
@@ -430,7 +430,7 @@ SAMPLE_MOVIES = [
         "director": "Ari Aster",
         "release_year": 2018,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/4OTONHaVHoWbNzBN1b5Jlm5k5hU.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/hjlZSXM86wJrfCv5VKfR5DI2VeU.jpg",
     },
     {
         "title": "Brokeback Mountain",
@@ -446,7 +446,7 @@ SAMPLE_MOVIES = [
         "director": "Ang Lee",
         "release_year": 2005,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/9J3aKD8xqv4fmCE2yfN1CzKFBhk.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/aByfQOQBNa4CMFwIgq3QrqY2ZHh.jpg",
     },
     {
         "title": "Oldboy",
@@ -497,7 +497,7 @@ SAMPLE_MOVIES = [
         "director": "Noah Baumbach",
         "release_year": 2019,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/e1BEDiMJOtOFKVQWPqJGQHc2N9R.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/2JRyCKaRKyJAVpsIHeLvPw5nHmw.jpg",
     },
     {
         "title": "Midsommar",
@@ -514,7 +514,7 @@ SAMPLE_MOVIES = [
         "director": "Ari Aster",
         "release_year": 2019,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/7LEI8ulZzO5gy9Ww2NVCrKmc9Bg.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/7LEI8ulZzO5gy9Ww2NVCrKmHeDZ.jpg",
     },
     {
         "title": "Knives Out",
@@ -531,7 +531,7 @@ SAMPLE_MOVIES = [
         "director": "Rian Johnson",
         "release_year": 2019,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/pThyQovXQrws2OKMRJnA4CJU5vq.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/pThyQovXQrw2m0s9x82twj48Jq4.jpg",
     },
     {
         "title": "Moonrise Kingdom",
@@ -548,7 +548,7 @@ SAMPLE_MOVIES = [
         "director": "Wes Anderson",
         "release_year": 2012,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/jLeHpCX6HCzrSuSKP1sjjTh2MkD.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/y4SXcbNl6CEF2t36icuzuBioj7K.jpg",
     },
     {
         "title": "Sorry to Bother You",
@@ -564,7 +564,7 @@ SAMPLE_MOVIES = [
         "director": "Boots Riley",
         "release_year": 2018,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/f7HfXLvMRsHm0y7tCBhM3pgxeqS.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/peTl1V04E9ppvhgvNmSX0r2ALqO.jpg",
     },
     {
         "title": "The Before Trilogy",
@@ -581,7 +581,7 @@ SAMPLE_MOVIES = [
         "director": "Richard Linklater",
         "release_year": 1995,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/lHGpqTdC8xUX3V6xSFnH68JqS3g.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/kf1Jb1c2JAOqjuzA3H4oDM263uB.jpg",
     },
     {
         "title": "Requiem for a Dream",
@@ -615,7 +615,7 @@ SAMPLE_MOVIES = [
         "director": "Amy Heckerling",
         "release_year": 1995,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/fPEvzMdRgHhAhCECMLJEhmVkpjA.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/8AwVTcgpTnmeOs4TdTWqcFDXEsA.jpg",
     },
     {
         "title": "2001: A Space Odyssey",
@@ -632,7 +632,7 @@ SAMPLE_MOVIES = [
         "director": "Stanley Kubrick",
         "release_year": 1968,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/ve72VxNqjIqBlG8TfpzFqrB3uyI.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/ve72VxNqjGM69Uky4WTo2bK6rfq.jpg",
     },
     {
         "title": "Inside Out",
@@ -649,7 +649,7 @@ SAMPLE_MOVIES = [
         "director": "Pete Docter",
         "release_year": 2015,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/aAmfIX3TT40zUHGcCKrlOZRKC7u.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/2H1TmgdfNtsKlU9jKdeNyYL5y8T.jpg",
     },
     {
         "title": "The Lobster",
@@ -666,7 +666,7 @@ SAMPLE_MOVIES = [
         "director": "Yorgos Lanthimos",
         "release_year": 2015,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/qEp8lEFedUWBhAh5bZrFalWRJuU.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/7Y9ILV1unpW9mLpGcqyGQU72LUy.jpg",
     },
     {
         "title": "Promising Young Woman",
@@ -683,7 +683,7 @@ SAMPLE_MOVIES = [
         "director": "Emerald Fennell",
         "release_year": 2020,
         "language": "English",
-        "poster_url": "https://image.tmdb.org/t/p/w500/o3oUErnuVMILbITVMkHhJ5RrXNr.jpg",
+        "poster_url": "https://image.tmdb.org/t/p/w500/73QoFJFmUrJfDG2EynFjNc5gJxk.jpg",
     },
 ]
 

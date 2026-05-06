@@ -418,6 +418,14 @@ class SearchViewsTests(TestCase):
         response = self.client.get(reverse("movie_detail", args=[movie.pk]))
         self.assertContains(response, f'src="{movie.poster_url}"')
 
+    def test_portrait_of_a_lady_on_fire_uses_valid_repaired_poster_path(self):
+        movie = Movie.objects.get(title="Portrait of a Lady on Fire")
+        self.assertEqual(
+            movie.poster_url,
+            "https://image.tmdb.org/t/p/w500/2LquGwEhbg3soxSCs9VNyh5VJd9.jpg",
+        )
+        self.assertNotIn("3NTAbAiao4JLzFsBE6jVNUsEDv4", movie.poster_url)
+
     def test_movie_detail_with_blank_genre_shows_no_related_titles(self):
         primary = Movie.objects.create(
             title="No Genre Primary",
