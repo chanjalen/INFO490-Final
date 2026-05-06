@@ -430,8 +430,13 @@ class SearchViewsTests(TestCase):
     def test_procfile_prepares_render_database_before_gunicorn(self):
         procfile = Path(settings.BASE_DIR) / "Procfile"
         command = procfile.read_text(encoding="utf-8")
-        self.assertIn("python manage.py prepare_render", command)
-        self.assertLess(command.index("prepare_render"), command.index("gunicorn"))
+        self.assertEqual(command.strip(), "web: bash start.sh")
+
+        start_script = Path(settings.BASE_DIR) / "start.sh"
+        start_command = start_script.read_text(encoding="utf-8")
+        self.assertIn("python manage.py prepare_render", start_command)
+        self.assertIn("gunicorn moviefinder.wsgi:application", start_command)
+        self.assertLess(start_command.index("prepare_render"), start_command.index("gunicorn"))
 
     def test_movie_detail_with_blank_genre_shows_no_related_titles(self):
         primary = Movie.objects.create(
