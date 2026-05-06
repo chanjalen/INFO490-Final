@@ -438,6 +438,13 @@ class SearchViewsTests(TestCase):
         self.assertIn("gunicorn moviefinder.wsgi:application", start_command)
         self.assertLess(start_command.index("prepare_render"), start_command.index("gunicorn"))
 
+    def test_wsgi_has_render_preparation_fallback_for_plain_gunicorn(self):
+        wsgi_file = Path(settings.BASE_DIR) / "moviefinder" / "wsgi.py"
+        wsgi_source = wsgi_file.read_text(encoding="utf-8")
+        self.assertIn("prepare_runtime_database", wsgi_source)
+        self.assertIn("RUNNING_ON_RENDER", wsgi_source)
+        self.assertLess(wsgi_source.index("get_wsgi_application"), wsgi_source.index("prepare_runtime_database"))
+
     def test_movie_detail_with_blank_genre_shows_no_related_titles(self):
         primary = Movie.objects.create(
             title="No Genre Primary",
