@@ -718,7 +718,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"✓ Done. {created_count} movies created, {updated_count} updated.\n"
+                f"Done. {created_count} movies created, {updated_count} updated.\n"
                 f"  Next step: python manage.py embed_movies"
             )
         )

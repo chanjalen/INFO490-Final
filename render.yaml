@@ -6,7 +6,7 @@ services:
     name: soclose
     runtime: python
     buildCommand: "bash build.sh"
-    startCommand: "gunicorn moviefinder.wsgi:application --log-file -"
+    startCommand: "python manage.py prepare_render && gunicorn moviefinder.wsgi:application --log-file -"
     envVars:
       - key: SECRET_KEY
         generateValue: true        # Render generates a secure random value

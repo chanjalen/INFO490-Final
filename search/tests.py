@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from django.test import TestCase
 from django.test import override_settings
@@ -425,6 +426,12 @@ class SearchViewsTests(TestCase):
             "https://image.tmdb.org/t/p/w500/2LquGwEhbg3soxSCs9VNyh5VJd9.jpg",
         )
         self.assertNotIn("3NTAbAiao4JLzFsBE6jVNUsEDv4", movie.poster_url)
+
+    def test_procfile_prepares_render_database_before_gunicorn(self):
+        procfile = Path(settings.BASE_DIR) / "Procfile"
+        command = procfile.read_text(encoding="utf-8")
+        self.assertIn("python manage.py prepare_render", command)
+        self.assertLess(command.index("prepare_render"), command.index("gunicorn"))
 
     def test_movie_detail_with_blank_genre_shows_no_related_titles(self):
         primary = Movie.objects.create(
