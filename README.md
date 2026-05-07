@@ -1,165 +1,209 @@
-# MovieFinder
+# SoClose
 
-A Django web app for searching movies by title. Built for Info 490 Final Project.
+SoClose is a Django movie discovery app for finding films from vague memories, scene clues, moods, characters, quotes, and visual details. It is organized into two Django apps:
 
-## Tech Stack
+- `search`: movie search, results, recommendations, history, analytics, AI search logic, and movie data commands.
+- `accounts`: signup, login, logout, profiles, account updates, and watchlist management.
 
-- Python 3.13
-- Django 6.0
-- SQLite (development database)
-- python-dotenv (environment variable management)
+The app uses SQLite for local development and PostgreSQL on Render when `DATABASE_URL` is configured. TMDB is used as an external movie metadata source; it is not the application database.
 
-## Project Structure
+## Dependencies
 
-```
-Info490 Final/
-├── moviefinder/          # Django project config
-│   ├── settings.py
-│   ├── urls.py
-│   ├── wsgi.py
-│   └── asgi.py
-├── search/               # Main app
-│   ├── models.py         # Movie model
-│   ├── views.py          # home, results, movie_detail
-│   ├── urls.py           # app URL routes
-│   ├── ai.py             # full AI pipeline
-│   ├── templates/
-│   │   └── search/
-│   │       ├── base.html
-│   │       ├── home.html
-│   │       ├── results.html
-│   │       └── movie_detail.html
-│   └── migrations/
-├── static/               # Static files (CSS, JS, images)
-├── db.sqlite3            # SQLite database
-├── manage.py
-├── requirements.txt
-├── .env                  # Local environment variables (not committed)
-└── .env.example          # Template for .env
-```
+Core dependencies are listed in `requirements.txt`:
 
-## Setup
+- Django
+- python-dotenv
+- gunicorn
+- WhiteNoise
+- rank-bm25
+- requests
+- dj-database-url
+- psycopg2-binary
 
-1. **Clone the repo and create a virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Windows: venv\Scripts\activate
+Optional local AI dependencies are listed in `requirements-dev.txt`:
+
+- sentence-transformers
+- transformers
+- scikit-learn
+- numpy
+
+Use `requirements.txt` for the deployed Render app. Use `requirements-dev.txt` locally only if you want to run the optional local dense models and FLAN-T5 explanation pipeline.
+
+## Setup Instructions
+
+1. Create and activate a virtual environment.
+
+   PowerShell:
+
+   ```powershell
+   py -3.11 -m venv .venv
+   .\.venv\Scripts\Activate.ps1
    ```
 
-2. **Install dependencies**
+   macOS/Linux:
+
+   ```bash
+   python3.11 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+2. Install dependencies.
+
+   Core app only:
+
    ```bash
    pip install -r requirements.txt
    ```
-   Key packages:
 
-   - `Django>=6.0` — web framework
-   - `rank-bm25>=0.2.2` — keyword retrieval (Stage 1a)
-   - `sentence-transformers>=3.0.0` — bi-encoder embeddings and cross-encoder re-ranking (Stages 1b, 2)
-   - `transformers>=4.40.0` — FLAN-T5 local text generation (Stage 3)
-   - `scikit-learn>=1.4.0` — cosine similarity
-   - `numpy>=1.26.0` — vector math
-   - `requests>=2.31.0` — TMDB API fetching (setup only)
-   - `python-dotenv` — environment variable management
+   Core app plus optional local AI models:
 
-AI models are downloaded automatically from Hugging Face on first use and cached locally (~360 MB total). No GPU required — all inference runs on CPU.
-
-3. **Set up environment variables**
    ```bash
-   cp .env.example .env
-   # Edit .env and fill in your SECRET_KEY & TMBD_API_KEY
-   ```
-   **Getting a TMDB API key (free, takes 2 minutes):**
-   1. Create an account at [themoviedb.org/signup](https://www.themoviedb.org/signup)
-   2. Go to [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)
-   3. Request an API Key → choose **Developer** (instant approval)
-   4. Copy the **API Key (v3 auth)** value into your `.env`
-
-
-4. **Load Movie Data**
-
-   **Option A — Full dataset via TMDB (~15,000 movies, recommended)**
-      ```bash
-      python manage.py fetch_tmdb_movies
-      ```
-   This runs two discovery passes against the TMDB API and fetches full details (cast, tagline, genres, director) for each film. Takes approximately 10–15 minutes. Run with `--resume` to continue an interrupted fetch.
-   
-   **Option B — Sample dataset (45 movies, for quick testing)**
-      ```bash
-      python manage.py load_sample_movies
-      ```
-
-5. **Pre-compute AI embeddings**
-   ```bash
-   python manage.py embed_movies
+   pip install -r requirements-dev.txt
    ```
 
-This runs every movie through the local sentence-transformer model and stores the resulting vector in the database. Takes approximately 15 minutes for 15,000 movies on CPU. Only needs to be run once, and again only when new movies are added.
+3. Create a local `.env` file.
 
-6. **Run migrations**
+   ```env
+   SECRET_KEY=dev-only-secret-key
+   DEBUG=True
+   APP_ENV=local
+   ALLOWED_HOSTS=localhost,127.0.0.1
+   TMDB_API_KEY=
+   GEMINI_API_KEY=
+   LOCAL_DENSE_ENABLED=False
+   FLAN_T5_ENABLED=False
+   ```
+
+   Notes:
+
+   - `TMDB_API_KEY` is only needed if you run `fetch_tmdb_movies`.
+   - `GEMINI_API_KEY` is only needed for production Gemini behavior.
+   - Local mode does not call Gemini.
+   - Set `LOCAL_DENSE_ENABLED=True` only after the local model files are installed in the cache.
+
+4. Run migrations.
+
    ```bash
    python manage.py migrate
    ```
 
-7. **Start the development server**
+5. Load movie data.
+
+   Quick curated dataset:
+
    ```bash
-   python manage.py runserver
+   python manage.py load_sample_movies
    ```
 
-   App will be available at `http://127.0.0.1:8000/`
+   Optional larger TMDB import:
 
-## How to Run the App
+   ```bash
+   python manage.py fetch_tmdb_movies
+   ```
 
-| URL                    | Page                 | Description                             |
-|------------------------|----------------------|-----------------------------------------|
-| `/`                    | Home / Search        | Query builder with category chips       |
-| `/results/?q=<query>`  | Search Results       | AI-ranked movie cards with match scores |
-| `/movie/<id>/`         | Movie Detail         | Full movie info                         |
-| `/movie/<id>/explain/` | Match Explain (AJAX) | Why this film matches your query        |
-| `/recommended/`        | Recommended For You  | Personalized daily recommendations      |
-| `/history/`            | Search History       | Past searches with re-run and delete    |
-| `/watchlist/`          | Watchlist            | Saved films                             |
-| `/admin/`              | Django Admin         | Database management                     |
+   The TMDB import command is designed to expand the catalog toward a much larger movie database, depending on the number of pages fetched and API availability. The checked local database is not guaranteed to contain the full 15,000-movie target.
 
-## Where to Access the AI Features
+6. Optional: precompute local embeddings.
 
-All AI features are part of the live user flow, none require separate scripts or notebooks.
+   This requires `requirements-dev.txt`, cached sentence-transformer models, and `LOCAL_DENSE_ENABLED=True`.
 
-**Semantic + Keyword Hybrid Search**
-Navigate to the home page at `/`. Type a description in the search box — this can be a character name, a scene description, a mood, a quote, or any combination. Use the category chips (Character, Scene, Plot, Dialogue, Visual) to add structured query groups. Click **Search**. Results at `/results/` are ranked by a three-stage AI pipeline: BM25 keyword retrieval and dense semantic search run in parallel, their results are merged with Reciprocal Rank Fusion, and a cross-encoder model produces the final ranking.
+   ```bash
+   python manage.py embed_movies
+   ```
 
-**Match Explanation Panel**
-On any search results page, click **"Why this match?"** on a result card. A locally-generated explanation (FLAN-T5) appears inline explaining the specific connection between your query and that film. This is the only feature with a slight delay (~1–2 seconds) as the model runs inference on CPU.
+## How to Run the App Locally
 
-**Personalized Recommendations**
-Navigate to `/recommended/` via the top navigation bar. The system reads your last 10 searches, encodes them as embedding vectors, averages them into a single taste-profile vector, and returns the 6 most similar films in the database. If you have no search history yet, an editorial default set is shown.
+Start the Django development server:
 
+```bash
+python manage.py runserver
+```
 
-## Environment Variables
+Open:
 
-| Variable        | Description                   | Default                                                    |
-|-----------------|-------------------------------|------------------------------------------------------------|
-| `SECRET_KEY`    | Django secret key             | required                                                   |
-| `TMDB_API_KEY`  | For data fetch only           | Used by `fetch_tmdb_movies` command, not needed at runtime |
-| `DEBUG`         | Enable debug mode             | `False`                                                    |
-| `ALLOWED_HOSTS` | Comma-separated list of hosts | `localhost,127.0.0.1`                                      |
+```text
+http://127.0.0.1:8000/
+```
 
-## URL Routes
+Useful routes:
 
-| URL                   | View           | Description           |
-|-----------------------|----------------|-----------------------|
-| `/`                   | `home`         | Search landing page   |
-| `/results/?q=<query>` | `results`      | Search results        |
-| `/movie/<id>/`        | `movie_detail` | Individual movie page |
-| `/admin/`             | Django admin   | Admin panel           |
+| URL | Purpose |
+| --- | --- |
+| `/` | Main search page |
+| `/results/?q=<query>` | Search results |
+| `/movie/<id>/` | Movie detail page |
+| `/recommended/` | Personalized recommendations |
+| `/history/` | Search history |
+| `/analytics/` | Search analytics dashboard |
+| `/analytics/data/` | Internal JSON API for analytics |
+| `/watchlist/` | User watchlist |
+| `/login/` | Login |
+| `/signup/` | Signup |
+| `/admin/` | Django admin |
 
-## Movie Model Fields
+## Where to Access the AI Feature
 
-| Field          | Type         | Notes    |
-|----------------|--------------|----------|
-| `title`        | CharField    | Required |
-| `synopsis`     | TextField    | Optional |
-| `genre`        | CharField    | Optional |
-| `cast`         | TextField    | Optional |
-| `release_year` | IntegerField | Optional |
-| `language`     | CharField    | Optional |
-| `poster_url`   | URLField     | Optional |
+The main AI feature is part of the normal user flow.
+
+1. Go to `/`.
+2. Enter a vague movie clue, such as `woman in red dress`, `a girl enters a spirit world`, or `night scene in a small town`.
+3. Optionally choose a focus category such as Character, Scene, Plot, Dialogue, or Visual.
+4. Submit the search.
+5. Results appear at `/results/` as ranked movie cards with match percentages.
+
+The recommendation AI feature is available at:
+
+```text
+/recommended/
+```
+
+It uses watchlist items, search history, session activity, genre, cast, and synopsis signals to recommend movies. In production, this route uses Gemini when configured. Locally, it uses local/session-based recommendation logic and falls back to editorial defaults when there is not enough user history.
+
+The optional explanation feature is available from:
+
+```text
+/movie/<id>/explain/
+```
+
+This endpoint is login-protected and returns a JSON explanation for why a result matches the user's query. If FLAN-T5 is disabled or unavailable, the app returns a template-based explanation instead.
+
+## Production on Render
+
+Render build command:
+
+```bash
+bash build.sh
+```
+
+Render start command:
+
+```bash
+bash start.sh
+```
+
+Do not include `web:` in the Render dashboard start command. `web:` belongs only in `Procfile`.
+
+Important production environment variables:
+
+```env
+SECRET_KEY=<set by Render>
+DEBUG=False
+APP_ENV=production
+ALLOWED_HOSTS=.onrender.com
+DATABASE_URL=<Render PostgreSQL connection string>
+GEMINI_API_KEY=<Gemini API key>
+GEMINI_MODEL=gemini-2.5-flash
+FLAN_T5_ENABLED=False
+```
+
+In production, SoClose uses PostgreSQL, WhiteNoise static files, Gunicorn, and Gemini-powered semantic search/recommendations. `start.sh` runs `prepare_render` before Gunicorn so migrations, curated sample data, and poster repair logic are applied before traffic reaches the app.
+
+## Tests
+
+Run the Django test suite:
+
+```bash
+python manage.py test
+```
+
+The tests cover local-vs-production AI routing, Gemini parsing guardrails, recommendation behavior, poster URL repair, Render startup commands, tokenizer normalization, and core page behavior.
