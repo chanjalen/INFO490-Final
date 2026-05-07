@@ -146,7 +146,7 @@ Useful routes:
 The main AI feature is part of the normal user flow.
 
 1. Go to `/`.
-2. Enter a vague movie clue, such as `woman in red dress`, `a girl enters a spirit world`, or `night scene in a small town`.
+2. Enter a vague movie clue, such as `a girl enters a spirit world`, `night scene in a small town`, or `a lonely wizard in a hidden forest`.
 3. Optionally choose a focus category such as Character, Scene, Plot, Dialogue, or Visual.
 4. Submit the search.
 5. Results appear at `/results/` as ranked movie cards with match percentages.

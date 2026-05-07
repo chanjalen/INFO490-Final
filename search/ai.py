@@ -1,6 +1,7 @@
 import json
 import logging
 import math
+import re
 import string
 import importlib.util
 import os
@@ -137,22 +138,47 @@ _STOPWORDS = {
     "about","some","into","has","have","had","its","after","before","when",
 }
 
+_STRUCTURE_LABELS = {
+    "accent", "action", "actor", "actress", "age", "appearance", "camera",
+    "cast", "character", "charname", "color", "conflict", "decade",
+    "dialogue", "director", "ending", "era", "film", "gender", "general",
+    "genre", "hair", "height", "language", "lang", "location", "name",
+    "object", "objects", "outfit", "palette", "phrase", "place", "plot",
+    "quote", "relationship", "role", "scene", "scence", "setting", "style",
+    "theme", "time", "title", "tone", "twist", "visual", "weather", "year",
+}
+
+_STRUCTURE_LABEL_PHRASES = {
+    "actor / actress", "age range", "camera style", "color palette",
+    "exact quote", "film style", "hair color", "plot twist", "time of day",
+    *_STRUCTURE_LABELS,
+}
+_STRUCTURE_LABEL_PATTERN = (
+    r"\b(?:"
+    + "|".join(
+        re.escape(label).replace(r"\ ", r"\s+").replace("/", r"\s*/\s*")
+        for label in sorted(_STRUCTURE_LABEL_PHRASES, key=len, reverse=True)
+    )
+    + r")\s*:"
+)
+
+
+def strip_structure_labels(text: str) -> str:
+    text = re.sub(_STRUCTURE_LABEL_PATTERN, " ", text or "", flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip()
+
 
 def tokenize(text: str) -> list[str]:
-    text = text.lower().translate(str.maketrans("", "", string.punctuation))
+    text = strip_structure_labels(text).lower().translate(str.maketrans("", "", string.punctuation))
     normalizations = {
         "women": "woman",
         "woman": "woman",
         "men": "man",
-        "dree": "dress",
-        "drees": "dress",
-        "dressed": "dress",
-        "dresses": "dress",
     }
     return [
         normalizations.get(t, t)
         for t in text.split()
-        if t and t not in _STOPWORDS
+        if t and t not in _STOPWORDS and t not in _STRUCTURE_LABELS
     ]
 
 
@@ -189,10 +215,13 @@ def _get_bm25_index(movies: list):
 
 
 def bm25_search(query: str, movies: list, top_k: int = 50) -> list[tuple]:
+    query = strip_structure_labels(query)
     if not movies or not query.strip():
         return []
     index  = _get_bm25_index(movies)
     tokens = tokenize(query)
+    if not tokens:
+        return []
     semantic_tokens = [token for token in tokens if not token.isdigit()]
     scores = index.get_scores(tokens)
     ranked = sorted(zip(movies, scores), key=lambda x: x[1], reverse=True)
@@ -215,6 +244,7 @@ def bm25_search(query: str, movies: list, top_k: int = 50) -> list[tuple]:
 # =============================================================================
 
 def semantic_search(query: str, movies: list, top_k: int = 50) -> list[tuple]:
+    query = strip_structure_labels(query)
     if not _dense_enabled() or not movies or not query.strip():
         return []
     import numpy as np
@@ -267,6 +297,7 @@ def rerank(query: str, candidates: list[tuple], top_k: int = 10) -> list[tuple]:
     ce    = get_cross_encoder()
     if ce is None:
         return candidates[:top_k]
+    query = strip_structure_labels(query)
     pairs = [(query, build_movie_text(m)) for m, _ in candidates]
     scores = ce.predict(pairs, show_progress_bar=False).tolist()
     reranked = sorted(
@@ -301,6 +332,9 @@ def search(
     """
     if not movies or not query.strip():
         return []
+    query = strip_structure_labels(query)
+    if not query:
+        return []
 
     bm25_results = bm25_search(query, movies, top_k=bm25_candidates)
 
@@ -330,12 +364,13 @@ def search(
 # =============================================================================
 
 def _keyword_overlap(query: str, movie) -> list[str]:
-    q_tokens = set(tokenize(query))
+    q_tokens = set(tokenize(strip_structure_labels(query)))
     m_tokens  = set(tokenize(build_movie_text(movie)))
     return sorted(q_tokens & m_tokens)
 
 
 def explain_match_local(query: str, movie, score: float) -> str:
+    query = strip_structure_labels(query)
     overlapping  = _keyword_overlap(query, movie)
     overlap_str  = ", ".join(overlapping[:5]) if overlapping else "thematic elements"
     synopsis_snip = (movie.synopsis or "")[:200]

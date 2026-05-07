@@ -19,7 +19,7 @@ from .gemini import (
     _extract_ranked_picks,
     _gemini_url,
 )
-from .ai import get_bi_encoder, tokenize
+from .ai import bm25_search, get_bi_encoder, strip_structure_labels, tokenize
 
 
 class SearchViewsTests(TestCase):
@@ -179,7 +179,7 @@ class SearchViewsTests(TestCase):
         broken = '[{"index": 0, "confidence": 0.91, "reason": "unterminated'
         with patch("search.gemini._post_gemini", return_value=broken):
             results = rank_search_results(
-                "women in red dress",
+                "lonely wizard in a hidden forest",
                 [Movie.objects.get(title="Spirited Away")],
             )
 
@@ -194,8 +194,8 @@ class SearchViewsTests(TestCase):
     )
     def test_production_semantic_search_uses_local_like_guardrail_when_gemini_returns_empty(self):
         target = Movie.objects.create(
-            title="Red Dress Mystery",
-            synopsis="A woman in a red dress appears at night and changes the course of a chase.",
+            title="Hidden Forest Mystery",
+            synopsis="A lonely wizard appears in a hidden forest and changes the course of a chase.",
             genre="Mystery",
             cast="A. Performer",
             release_year=2026,
@@ -205,7 +205,7 @@ class SearchViewsTests(TestCase):
 
         with patch("search.gemini._post_gemini", return_value="[]"):
             results = rank_search_results(
-                "General: women in red dree",
+                "General: lonely wizard hidden forest",
                 [other, target],
             )
 
@@ -399,9 +399,31 @@ class SearchViewsTests(TestCase):
         broken = '[{"index": 4, "confidence": 0.82, "reason": "cut off'
         self.assertEqual(_extract_ranked_picks(broken)[0]["index"], 4)
 
-    def test_tokenizer_normalizes_common_visual_query_terms(self):
-        self.assertIn("woman", tokenize("women in red dree"))
-        self.assertIn("dress", tokenize("women in red dree"))
+    def test_tokenizer_filters_search_category_labels(self):
+        tokens = tokenize(
+            "General: moody rain; Actor / Actress: Brad Pitt; "
+            "Plot twist: hidden memory; Camera style: close-ups"
+        )
+
+        self.assertEqual(
+            tokens,
+            ["moody", "rain", "brad", "pitt", "hidden", "memory", "closeups"],
+        )
+        for label in ["general", "actor", "actress", "plot", "twist", "camera", "style"]:
+            self.assertNotIn(label, tokens)
+
+    def test_bm25_ignores_category_only_query_labels(self):
+        movie = Movie.objects.create(
+            title="Actor Plot Scene",
+            synopsis="A catalogue entry whose searchable text contains category words only.",
+            genre="Drama",
+            cast="Performer",
+            release_year=2026,
+            language="English",
+        )
+
+        self.assertEqual(strip_structure_labels("Actor: Plot: Scene:"), "")
+        self.assertEqual(bm25_search("Actor: Plot: Scene:", [movie]), [])
 
     @override_settings(LOCAL_DENSE_ENABLED=False)
     def test_local_dense_models_are_opt_in(self):

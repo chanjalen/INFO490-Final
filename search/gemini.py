@@ -16,7 +16,7 @@ import re
 import requests
 from django.conf import settings
 
-from .ai import bm25_search, build_movie_text, tokenize
+from .ai import bm25_search, build_movie_text, strip_structure_labels, tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -147,14 +147,7 @@ def _movie_catalog_lines(movies: list, synopsis_chars: int = 260) -> list[str]:
 
 
 def _strip_focus_labels(query: str) -> str:
-    query = (query or "").strip()
-    query = re.sub(
-        r"\b(?:general|character|scene|plot|dialogue|visual|time of day|weather|action|name)\s*:\s*",
-        " ",
-        query,
-        flags=re.IGNORECASE,
-    )
-    return re.sub(r"\s+", " ", query).strip()
+    return strip_structure_labels(query)
 
 
 def _production_lexical_fallback(query: str, movies: list, count: int) -> list[tuple]:
@@ -499,7 +492,7 @@ def rank_search_results(
     """
     if not _gemini_enabled():
         return []
-    query = (query or "").strip()
+    query = strip_structure_labels(query)
     if not query or not catalog_movies:
         return []
 

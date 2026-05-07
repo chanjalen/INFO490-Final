@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         charname:       { label: 'Name',           ph: 'Character name…'         },
         relationship:   { label: 'Relationship',   ph: 'e.g. brother and sister…'},
         hair:           { label: 'Hairstyle',      ph: 'e.g. curly, bald…'       },
-        outfit:         { label: 'Outfit',         ph: 'e.g. red dress…'         },
+        outfit:         { label: 'Outfit',         ph: 'e.g. torn jacket…'       },
         height:         { label: 'Height',         ph: 'e.g. tall, short…'       },
         accent:         { label: 'Accent',         ph: 'e.g. British…'           },
         age:            { label: 'Age',            ph: 'e.g. teenager…'          },
