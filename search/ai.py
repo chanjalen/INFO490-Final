@@ -6,6 +6,7 @@ import string
 import importlib.util
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +29,10 @@ _cross_encoder = None
 _flan_pipeline = None
 _bm25_index    = None
 _bm25_pks      = None
+_bi_encoder_unavailable = False
+_cross_encoder_unavailable = False
+_bi_encoder_lock = threading.Lock()
+_cross_encoder_lock = threading.Lock()
 
 
 def _dense_enabled() -> bool:
@@ -56,45 +61,69 @@ def _model_cache_dir(*parts: str) -> str | None:
 def get_bi_encoder():
     if not _dense_enabled():
         return None
-    global _bi_encoder
+    global _bi_encoder, _bi_encoder_unavailable
+    if _bi_encoder_unavailable:
+        return None
     if _bi_encoder is None:
-        from sentence_transformers import SentenceTransformer
-        logger.info("Loading bi-encoder: %s", BI_ENCODER_MODEL)
-        try:
-            _bi_encoder = SentenceTransformer(
-                BI_ENCODER_MODEL,
-                cache_folder=_model_cache_dir("sentence-transformers"),
-                local_files_only=True,
-            )
-        except TypeError:
-            _bi_encoder = SentenceTransformer(
-                BI_ENCODER_MODEL,
-                cache_folder=_model_cache_dir("sentence-transformers"),
-            )
-        except Exception as exc:
-            logger.warning("Bi-encoder cache load failed: %s", exc)
-            return None
+        with _bi_encoder_lock:
+            if _bi_encoder is not None or _bi_encoder_unavailable:
+                return _bi_encoder
+            from sentence_transformers import SentenceTransformer
+            logger.info("Loading bi-encoder: %s", BI_ENCODER_MODEL)
+            local_only = False
+            try:
+                from django.conf import settings
+                local_only = bool(getattr(settings, "LOCAL_MODEL_OFFLINE", False))
+            except Exception:
+                local_only = os.environ.get("LOCAL_MODEL_OFFLINE", "False") == "True"
+            try:
+                _bi_encoder = SentenceTransformer(
+                    BI_ENCODER_MODEL,
+                    cache_folder=_model_cache_dir("sentence-transformers"),
+                    local_files_only=local_only,
+                )
+            except TypeError:
+                _bi_encoder = SentenceTransformer(
+                    BI_ENCODER_MODEL,
+                    cache_folder=_model_cache_dir("sentence-transformers"),
+                )
+            except Exception as exc:
+                _bi_encoder_unavailable = True
+                logger.warning("Bi-encoder load failed; using BM25 fallback for this process: %s", exc)
+                return None
     return _bi_encoder
 
 
 def get_cross_encoder():
     if not _dense_enabled():
         return None
-    global _cross_encoder
+    global _cross_encoder, _cross_encoder_unavailable
+    if _cross_encoder_unavailable:
+        return None
     if _cross_encoder is None:
-        from sentence_transformers import CrossEncoder
-        logger.info("Loading cross-encoder: %s", CROSS_ENCODER_MODEL)
-        try:
-            _cross_encoder = CrossEncoder(
-                CROSS_ENCODER_MODEL,
-                max_length=512,
-                local_files_only=True,
-            )
-        except TypeError:
-            _cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL, max_length=512)
-        except Exception as exc:
-            logger.warning("Cross-encoder cache load failed: %s", exc)
-            return None
+        with _cross_encoder_lock:
+            if _cross_encoder is not None or _cross_encoder_unavailable:
+                return _cross_encoder
+            from sentence_transformers import CrossEncoder
+            logger.info("Loading cross-encoder: %s", CROSS_ENCODER_MODEL)
+            local_only = False
+            try:
+                from django.conf import settings
+                local_only = bool(getattr(settings, "LOCAL_MODEL_OFFLINE", False))
+            except Exception:
+                local_only = os.environ.get("LOCAL_MODEL_OFFLINE", "False") == "True"
+            try:
+                _cross_encoder = CrossEncoder(
+                    CROSS_ENCODER_MODEL,
+                    max_length=512,
+                    local_files_only=local_only,
+                )
+            except TypeError:
+                _cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL, max_length=512)
+            except Exception as exc:
+                _cross_encoder_unavailable = True
+                logger.warning("Cross-encoder load failed; using fused ranking for this process: %s", exc)
+                return None
     return _cross_encoder
 
 
@@ -162,6 +191,17 @@ _STRUCTURE_LABEL_PATTERN = (
     + r")\s*:"
 )
 
+_QUERY_EXPANSIONS = {
+    "female": ("woman", "women", "girl", "mother", "daughter", "wife", "her", "actress"),
+    "woman": ("female", "women", "girl", "mother", "daughter", "wife", "her"),
+    "women": ("woman", "female", "girl", "mother", "daughter", "wife", "her"),
+    "girl": ("woman", "women", "female", "daughter", "child", "teen"),
+    "male": ("man", "men", "boy", "father", "son", "husband", "him", "actor"),
+    "man": ("male", "men", "boy", "father", "son", "husband", "him"),
+    "men": ("man", "male", "boy", "father", "son", "husband", "him"),
+    "boy": ("man", "men", "male", "son", "child", "teen"),
+}
+
 
 def strip_structure_labels(text: str) -> str:
     text = re.sub(_STRUCTURE_LABEL_PATTERN, " ", text or "", flags=re.IGNORECASE)
@@ -180,6 +220,31 @@ def tokenize(text: str) -> list[str]:
         for t in text.split()
         if t and t not in _STOPWORDS and t not in _STRUCTURE_LABELS
     ]
+
+
+def expand_query_tokens(tokens: list[str]) -> list[str]:
+    expanded = list(tokens)
+    seen = set(expanded)
+    for token in tokens:
+        for related in _QUERY_EXPANSIONS.get(token, ()):
+            if related not in seen and related not in _STOPWORDS:
+                expanded.append(related)
+                seen.add(related)
+    return expanded
+
+
+def token_overlap(query_tokens: set[str], movie_tokens: set[str]) -> set[str]:
+    overlap = query_tokens & movie_tokens
+    for query_token in query_tokens:
+        if len(query_token) < 4:
+            continue
+        for movie_token in movie_tokens:
+            if len(movie_token) < 4:
+                continue
+            if movie_token.startswith(query_token) or query_token.startswith(movie_token):
+                overlap.add(query_token)
+                break
+    return overlap
 
 
 def build_movie_text(movie) -> str:
@@ -219,23 +284,38 @@ def bm25_search(query: str, movies: list, top_k: int = 50) -> list[tuple]:
     if not movies or not query.strip():
         return []
     index  = _get_bm25_index(movies)
-    tokens = tokenize(query)
+    tokens = expand_query_tokens(tokenize(query))
     if not tokens:
         return []
     semantic_tokens = [token for token in tokens if not token.isdigit()]
     scores = index.get_scores(tokens)
     ranked = sorted(zip(movies, scores), key=lambda x: x[1], reverse=True)
     results = []
+    result_pks = set()
+    overlap_fallback = []
+    semantic_token_set = set(semantic_tokens)
     for movie, score in ranked:
+        movie_tokens = set(tokenize(build_movie_text(movie)))
+        overlap = token_overlap(semantic_token_set, movie_tokens) if semantic_tokens else set()
         if score <= 0.0:
+            if overlap:
+                overlap_fallback.append((movie, len(overlap) / max(1, len(semantic_token_set))))
             continue
-        if semantic_tokens:
-            movie_tokens = set(tokenize(build_movie_text(movie)))
-            if not (set(semantic_tokens) & movie_tokens):
-                continue
+        if semantic_tokens and not overlap:
+            continue
         results.append((movie, float(score)))
+        result_pks.add(movie.pk)
         if len(results) >= top_k:
             break
+    if len(results) < top_k and overlap_fallback:
+        overlap_fallback.sort(key=lambda item: item[1], reverse=True)
+        for movie, score in overlap_fallback:
+            if movie.pk in result_pks:
+                continue
+            results.append((movie, float(score)))
+            result_pks.add(movie.pk)
+            if len(results) >= top_k:
+                break
     return results
 
 
@@ -366,7 +446,7 @@ def search(
 def _keyword_overlap(query: str, movie) -> list[str]:
     q_tokens = set(tokenize(strip_structure_labels(query)))
     m_tokens  = set(tokenize(build_movie_text(movie)))
-    return sorted(q_tokens & m_tokens)
+    return sorted(token_overlap(q_tokens, m_tokens))
 
 
 def explain_match_local(query: str, movie, score: float) -> str:

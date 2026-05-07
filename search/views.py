@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 
 from .models import Movie, SearchRecord, SearchHistory
 from accounts.models import WatchlistItem
-from .ai import explain_match_local, get_recommendations, search, tokenize, build_movie_text
+from .ai import explain_match_local, get_recommendations, search, tokenize, build_movie_text, token_overlap
 from .gemini import (
     get_catalog_recommendations,
     get_taste_profile_recommendations,
@@ -178,7 +178,7 @@ def results(request):
             "score": score,
             "score_pct": min(100, max(0, int(score * 100))),
             "in_watchlist": movie.pk in watchlisted_ids,
-            "matched_keywords": sorted(q_tokens & set(tokenize(build_movie_text(movie))))[:6],
+            "matched_keywords": sorted(token_overlap(q_tokens, set(tokenize(build_movie_text(movie)))))[:6],
             "rank": rank,
         }
         for rank, (movie, score) in enumerate(raw_results, start=1)

@@ -29,13 +29,13 @@ Local mode is designed to avoid API calls.
 
 BM25 is always available and handles keyword matching over movie text built from title, tagline, genre, synopsis, cast, director, and year.
 
-If local dense search is enabled and the model files are present in cache, the app can also use:
+Local dense search is enabled by default. When the sentence-transformer models are available or can be downloaded into `cache/`, the app also uses:
 
 - `all-MiniLM-L6-v2` for dense semantic retrieval.
 - Reciprocal Rank Fusion to merge BM25 and dense results.
 - `cross-encoder/ms-marco-MiniLM-L-6-v2` to rerank the top candidate pool.
 
-If dense models are disabled or missing, local search falls back to normalized BM25 results instead of crashing.
+If dense models are explicitly disabled or cannot load, local search falls back to normalized BM25 results instead of crashing.
 
 ### Production Search Pipeline
 
@@ -127,7 +127,7 @@ The app can only return movies that exist in the database. The project includes:
 - TMDB ingestion through `fetch_tmdb_movies`
 - poster repair logic for curated sample rows
 
-The TMDB ingestion command is designed to grow the catalog toward a much larger dataset, but the checked local database is not guaranteed to contain the full 15,000-movie target. This means some searches can fail because the correct movie is simply absent from the database.
+The TMDB ingestion command is designed to grow the catalog toward a much larger dataset, but the checked local database is not guaranteed to contain the full 50,000-movie Render import target. This means some searches can fail because the correct movie is simply absent from the database.
 
 Future scaling should load a larger dataset, precompute embeddings offline, and store retrieval data in a scalable search index or vector database. A future version could also explore larger datasets such as PANDA-70M, especially for subtitle and scene-level retrieval beyond basic movie metadata.
 

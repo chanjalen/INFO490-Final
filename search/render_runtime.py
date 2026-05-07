@@ -1,11 +1,53 @@
 import logging
 
+from django.conf import settings
 from django.core.management import call_command
 from django.db import connection
 
 logger = logging.getLogger(__name__)
 
 _PREPARED = False
+
+
+def _maybe_import_tmdb_catalog(write):
+    if not getattr(settings, "TMDB_IMPORT_ON_PREPARE", False):
+        return
+    if not getattr(settings, "TMDB_API_KEY", ""):
+        write("TMDB import skipped: TMDB_API_KEY is not configured.")
+        return
+
+    from search.models import Movie
+
+    current_count = Movie.objects.count()
+    target_count = getattr(settings, "TMDB_IMPORT_TARGET", 50000)
+    if current_count >= target_count:
+        write(
+            "TMDB import skipped: "
+            f"{current_count} movies already meet target {target_count}."
+        )
+        return
+
+    pages = getattr(settings, "TMDB_IMPORT_PAGES", 500)
+    min_votes = getattr(settings, "TMDB_IMPORT_MIN_VOTES", 0)
+    language = getattr(settings, "TMDB_IMPORT_LANGUAGE", "all")
+    skip_details = getattr(settings, "TMDB_IMPORT_SKIP_DETAILS", False)
+
+    write(
+        "Importing TMDB catalog into Render database: "
+        f"current={current_count}, target={target_count}, pages={pages}, "
+        f"min_votes={min_votes}, language={language}, "
+        f"skip_details={skip_details}."
+    )
+    command_options = {
+        "pages": pages,
+        "min_votes": min_votes,
+        "language": language,
+        "resume": True,
+        "single_pass": False,
+        "skip_details": skip_details,
+        "verbosity": 1,
+    }
+    call_command("fetch_tmdb_movies", **command_options)
 
 
 def prepare_runtime_database(*, stdout=None, style_success=None, raise_errors=True):
@@ -30,6 +72,8 @@ def prepare_runtime_database(*, stdout=None, style_success=None, raise_errors=Tr
         write("Preparing Render database...")
         call_command("migrate", interactive=False, verbosity=1)
         call_command("load_sample_movies", verbosity=1)
+        call_command("load_movie_snapshot", verbosity=1)
+        _maybe_import_tmdb_catalog(write)
 
         from search.models import Movie
 

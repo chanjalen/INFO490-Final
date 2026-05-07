@@ -1,21 +1,21 @@
 """
 Fetches movies from The Movie Database (TMDB) API and saves them to the
-local Movie model. Targets ~15,000 unique movies by running two discovery
+local Movie model. Targets a large unique catalog by running several discovery
 passes with different sort orders, then deduplicating by tmdb_id.
 
 Rate limiting:
   TMDB free tier allows 40 requests/second. This command targets 35 req/s
-  to stay safely under the limit. At that rate, fetching 15,000 movies
-  (plus ~15,000 detail calls) takes approximately 10–15 minutes.
+  to stay safely under the limit. Large imports can take a while because each
+  movie may need a detail call for cast, director, tagline, and genres.
 
 After running this command, run:
   python manage.py embed_movies
 to pre-compute sentence-transformer embeddings for all fetched movies.
 
 Usage:
-  python manage.py fetch_tmdb_movies                    # default: ~15,000 movies
-  python manage.py fetch_tmdb_movies --pages 250        # ~10,000 movies (faster)
-  python manage.py fetch_tmdb_movies --pages 100        # ~4,000 movies (quick test)
+  python manage.py fetch_tmdb_movies                    # default: large catalog
+  python manage.py fetch_tmdb_movies --pages 250        # faster
+  python manage.py fetch_tmdb_movies --pages 100        # quick test
   python manage.py fetch_tmdb_movies --skip-details     # no cast/tagline (fastest)
   python manage.py fetch_tmdb_movies --min-votes 100    # more obscure films
   python manage.py fetch_tmdb_movies --resume           # skip already-fetched movies
@@ -42,6 +42,10 @@ TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 DISCOVERY_PASSES = [
     {"sort_by": "popularity.desc",   "label": "popular"},
     {"sort_by": "vote_count.desc",   "label": "most voted"},
+    {"sort_by": "revenue.desc",      "label": "highest revenue"},
+    {"sort_by": "primary_release_date.desc", "label": "newest"},
+    {"sort_by": "primary_release_date.asc",  "label": "oldest"},
+    {"sort_by": "vote_average.desc", "label": "highest rated"},
 ]
 
 
@@ -99,13 +103,15 @@ class TMDBClient:
         return None
 
     def discover_page(self, page: int, sort_by: str, min_votes: int, language: str) -> dict | None:
-        return self.get("/discover/movie", params={
+        params = {
             "sort_by":                  sort_by,
             "vote_count.gte":           min_votes,
-            "with_original_language":   language,
             "include_adult":            False,
             "page":                     page,
-        })
+        }
+        if language:
+            params["with_original_language"] = language
+        return self.get("/discover/movie", params=params)
 
     def movie_details(self, tmdb_id: int) -> dict | None:
         """Fetch full movie details + credits in a single API call."""
@@ -140,17 +146,16 @@ def parse_release_year(release_date: str) -> int | None:
 
 
 class Command(BaseCommand):
-    help = "Fetch ~15,000 movies from the TMDB API and save to the database"
+    help = "Fetch a large movie catalog from the TMDB API and save it to the database"
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--pages",
             type=int,
-            default=375,
+            default=500,
             help=(
                 "Pages to fetch per discovery pass (max 500). "
-                "Two passes run by default, so total movies ≈ pages × 20 × 1.5 (after dedup). "
-                "Default 375 → ~15,000 unique movies."
+                "Several passes run by default, then movies are deduplicated by TMDB id."
             ),
         )
         parser.add_argument(
@@ -246,7 +251,7 @@ class Command(BaseCommand):
                     page=page,
                     sort_by=sort_by,
                     min_votes=min_votes,
-                    language=language or "en",
+                    language=language,
                 )
                 if data is None:
                     self.stdout.write(f"  ✗ Page {page} failed, skipping")

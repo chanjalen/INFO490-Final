@@ -24,6 +24,7 @@ env/
 
 # Local model cache
 .model-cache/
+cache/
 
 # IDE
 .idea/

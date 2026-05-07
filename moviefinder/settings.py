@@ -39,24 +39,38 @@ APP_ENV = os.environ.get("APP_ENV", "").strip().lower()
 if not APP_ENV:
     APP_ENV = "production" if RUNNING_ON_RENDER else "local"
 IS_PRODUCTION = APP_ENV == "production"
-USE_GEMINI = IS_PRODUCTION and bool(GEMINI_API_KEY)
+USE_GEMINI = (
+    os.environ.get("USE_GEMINI", "True") == "True"
+    and bool(GEMINI_API_KEY)
+)
 FLAN_T5_ENABLED = (
     os.environ.get("FLAN_T5_ENABLED")
     or os.environ.get("ENABLE_FLAN_T5")
     or "False"
 ) == "True"
 LOCAL_MODEL_CACHE_DIR = Path(
-    os.environ.get("LOCAL_MODEL_CACHE_DIR", BASE_DIR / ".model-cache")
+    os.environ.get("LOCAL_MODEL_CACHE_DIR", BASE_DIR / "cache")
 )
-LOCAL_DENSE_ENABLED = os.environ.get("LOCAL_DENSE_ENABLED", "False") == "True"
+LOCAL_DENSE_ENABLED = os.environ.get("LOCAL_DENSE_ENABLED", "True") == "True"
+LOCAL_MODEL_OFFLINE = os.environ.get("LOCAL_MODEL_OFFLINE", "False") == "True"
 if not IS_PRODUCTION:
     os.environ.setdefault("HF_HOME", str(LOCAL_MODEL_CACHE_DIR / "huggingface"))
     os.environ.setdefault(
         "SENTENCE_TRANSFORMERS_HOME",
         str(LOCAL_MODEL_CACHE_DIR / "sentence-transformers"),
     )
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    if LOCAL_MODEL_OFFLINE:
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+TMDB_IMPORT_ON_PREPARE = os.environ.get(
+    "TMDB_IMPORT_ON_PREPARE",
+    "True" if RUNNING_ON_RENDER else "False",
+) == "True"
+TMDB_IMPORT_TARGET = int(os.environ.get("TMDB_IMPORT_TARGET", "50000"))
+TMDB_IMPORT_PAGES = int(os.environ.get("TMDB_IMPORT_PAGES", "500"))
+TMDB_IMPORT_MIN_VOTES = int(os.environ.get("TMDB_IMPORT_MIN_VOTES", "0"))
+TMDB_IMPORT_LANGUAGE = os.environ.get("TMDB_IMPORT_LANGUAGE", "all")
+TMDB_IMPORT_SKIP_DETAILS = os.environ.get("TMDB_IMPORT_SKIP_DETAILS", "False") == "True"
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")

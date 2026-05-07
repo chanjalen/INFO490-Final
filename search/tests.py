@@ -1,4 +1,6 @@
 import os
+import gzip
+import json
 from pathlib import Path
 
 from django.test import TestCase
@@ -377,10 +379,12 @@ class SearchViewsTests(TestCase):
         mocked_post.assert_not_called()
 
     def test_local_model_cache_settings_are_configured(self):
-        self.assertTrue(str(settings.LOCAL_MODEL_CACHE_DIR).endswith(".model-cache"))
-        self.assertIn(".model-cache", settings.LOCAL_MODEL_CACHE_DIR.as_posix())
-        self.assertEqual(os.environ.get("HF_HUB_OFFLINE"), "1")
-        self.assertEqual(os.environ.get("TRANSFORMERS_OFFLINE"), "1")
+        self.assertTrue(str(settings.LOCAL_MODEL_CACHE_DIR).endswith("cache"))
+        self.assertIn("/cache", settings.LOCAL_MODEL_CACHE_DIR.as_posix())
+        self.assertTrue(settings.LOCAL_DENSE_ENABLED)
+        self.assertFalse(settings.LOCAL_MODEL_OFFLINE)
+        self.assertIsNone(os.environ.get("HF_HUB_OFFLINE"))
+        self.assertIsNone(os.environ.get("TRANSFORMERS_OFFLINE"))
 
     def test_gemini_uses_stable_configurable_model(self):
         self.assertEqual(settings.GEMINI_MODEL, "gemini-2.5-flash")
@@ -425,6 +429,42 @@ class SearchViewsTests(TestCase):
         self.assertEqual(strip_structure_labels("Actor: Plot: Scene:"), "")
         self.assertEqual(bm25_search("Actor: Plot: Scene:", [movie]), [])
 
+    def test_bm25_expands_general_person_descriptors(self):
+        woman_movie = Movie.objects.create(
+            title="Forest Mother",
+            synopsis="A mother and daughter protect their village.",
+            genre="Drama",
+            cast="Lead Performer",
+            release_year=2026,
+            language="English",
+        )
+        girl_movie = Movie.objects.create(
+            title="Young Explorer",
+            synopsis="A girl searches for her missing family.",
+            genre="Adventure",
+            cast="Another Performer",
+            release_year=2025,
+            language="English",
+        )
+
+        results = bm25_search("Gender: female", [woman_movie, girl_movie], top_k=10)
+
+        self.assertEqual({movie for movie, _ in results}, {woman_movie, girl_movie})
+
+    def test_bm25_matches_long_token_variants(self):
+        movie = Movie.objects.create(
+            title="City Story",
+            synopsis="A Parisian cafe becomes the center of a quiet romance.",
+            genre="Romance",
+            cast="Lead Performer",
+            release_year=2026,
+            language="French",
+        )
+
+        results = bm25_search("Location: paris", [movie], top_k=10)
+
+        self.assertEqual([result[0] for result in results], [movie])
+
     @override_settings(LOCAL_DENSE_ENABLED=False)
     def test_local_dense_models_are_opt_in(self):
         self.assertIsNone(get_bi_encoder())
@@ -466,6 +506,35 @@ class SearchViewsTests(TestCase):
         self.assertIn("prepare_runtime_database", wsgi_source)
         self.assertIn("RUNNING_ON_RENDER", wsgi_source)
         self.assertLess(wsgi_source.index("get_wsgi_application"), wsgi_source.index("prepare_runtime_database"))
+
+    def test_render_import_targets_large_tmdb_catalog(self):
+        render_yaml = (Path(settings.BASE_DIR) / "render.yaml").read_text(encoding="utf-8")
+        fetch_command = (
+            Path(settings.BASE_DIR)
+            / "search"
+            / "management"
+            / "commands"
+            / "fetch_tmdb_movies.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("TMDB_IMPORT_ON_PREPARE", render_yaml)
+        self.assertIn("value: true", render_yaml)
+        self.assertIn("TMDB_IMPORT_TARGET", render_yaml)
+        self.assertIn("value: 50000", render_yaml)
+        self.assertIn('"revenue.desc"', fetch_command)
+        self.assertIn('"primary_release_date.desc"', fetch_command)
+
+    def test_checked_in_movie_snapshot_is_available(self):
+        snapshot = Path(settings.BASE_DIR) / "search" / "data" / "movie_snapshot.json.gz"
+        self.assertTrue(snapshot.exists())
+
+        with gzip.open(snapshot, "rt", encoding="utf-8") as fh:
+            movies = json.load(fh)
+
+        self.assertGreaterEqual(len(movies), 10000)
+        self.assertIn("title", movies[0])
+        self.assertIn("synopsis", movies[0])
+        self.assertIn("tmdb_id", movies[0])
 
     def test_movie_detail_with_blank_genre_shows_no_related_titles(self):
         primary = Movie.objects.create(

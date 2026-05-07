@@ -70,16 +70,18 @@ Use `requirements.txt` for the deployed Render app. Use `requirements-dev.txt` l
    ALLOWED_HOSTS=localhost,127.0.0.1
    TMDB_API_KEY=
    GEMINI_API_KEY=
-   LOCAL_DENSE_ENABLED=False
+   LOCAL_DENSE_ENABLED=True
+   LOCAL_MODEL_OFFLINE=False
    FLAN_T5_ENABLED=False
    ```
 
    Notes:
 
    - `TMDB_API_KEY` is only needed if you run `fetch_tmdb_movies`.
-   - `GEMINI_API_KEY` is only needed for production Gemini behavior.
+   - `GEMINI_API_KEY` is needed for production Gemini semantic search.
    - Local mode does not call Gemini.
-   - Set `LOCAL_DENSE_ENABLED=True` only after the local model files are installed in the cache.
+   - Local dense semantic search is enabled by default and caches models under `cache/`.
+   - Set `LOCAL_MODEL_OFFLINE=True` only if the model files are already cached and you want no downloads.
 
 4. Run migrations.
 
@@ -95,17 +97,36 @@ Use `requirements.txt` for the deployed Render app. Use `requirements-dev.txt` l
    python manage.py load_sample_movies
    ```
 
+   Shared snapshot dataset:
+
+   ```bash
+   python manage.py load_movie_snapshot
+   ```
+
+   The checked-in snapshot gives local development the same baseline catalog that production loads before any live TMDB import.
+   To refresh that checked-in snapshot from your current local database, run:
+
+   ```bash
+   python manage.py export_movie_snapshot
+   ```
+
    Optional larger TMDB import:
 
    ```bash
    python manage.py fetch_tmdb_movies
    ```
 
-   The TMDB import command is designed to expand the catalog toward a much larger movie database, depending on the number of pages fetched and API availability. The checked local database is not guaranteed to contain the full 15,000-movie target.
+   The TMDB import command is designed to expand the catalog toward a much larger movie database, depending on the number of pages fetched and API availability. For the widest import, use:
+
+   ```bash
+   python manage.py fetch_tmdb_movies --pages 500 --min-votes 0 --language all --resume
+   ```
+
+   The checked local database is not guaranteed to contain the full 50,000-movie Render import target.
 
 6. Optional: precompute local embeddings.
 
-   This requires `requirements-dev.txt`, cached sentence-transformer models, and `LOCAL_DENSE_ENABLED=True`.
+   This uses the sentence-transformer dependencies in `requirements.txt` and caches models under `cache/`.
 
    ```bash
    python manage.py embed_movies
